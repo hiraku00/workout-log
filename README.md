@@ -29,17 +29,17 @@ brew install xcodegen
 git clone <repository-url>
 cd gym-app
 xcodegen generate
-open GymLog.xcodeproj
+open WorkoutLog.xcodeproj
 ```
 
-Xcodeで`GymLog`スキームと実行先のiPhoneを選択して実行します。
+Xcodeで`WorkoutLog`スキームと実行先のiPhoneを選択して実行します。
 
 コマンドラインでビルドする場合:
 
 ```bash
 xcodebuild \
-  -project GymLog.xcodeproj \
-  -scheme GymLog \
+  -project WorkoutLog.xcodeproj \
+  -scheme WorkoutLog \
   -destination 'generic/platform=iOS Simulator' \
   -configuration Debug \
   CODE_SIGNING_ALLOWED=NO \
@@ -66,7 +66,7 @@ xcodebuild \
 ## プロジェクト構成
 
 ```text
-GymLog/
+WorkoutLog/
   Models/          SwiftDataモデル
   ViewModels/      記録・コピー・集計ロジック
   Views/           SwiftUI画面
@@ -75,11 +75,11 @@ GymLog/
 project.yml        XcodeGen設定
 ```
 
-`GymLog.xcodeproj`は`project.yml`から生成されるためGit管理の対象外です。
+`WorkoutLog.xcodeproj`は`project.yml`から生成されるためGit管理の対象外です。
 
 ## フォント
 
-IPAex明朝 Ver.004.01を同梱しています。フォント本体、Readme、IPAフォントライセンスは`GymLog/Resources/Fonts`に収録しています。
+IPAex明朝 Ver.004.01を同梱しています。フォント本体、Readme、IPAフォントライセンスは`WorkoutLog/Resources/Fonts`に収録しています。
 
 ## License
 

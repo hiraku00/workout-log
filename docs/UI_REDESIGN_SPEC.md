@@ -1,8 +1,8 @@
-# GymLog UI/UX リデザイン設計書
+# Workout Log UI/UX リデザイン設計書
 
 ## 1. 文書情報
 
-- 対象アプリ: GymLog
+- 対象アプリ: Workout Log
 - 対象OS: iOS 17以降 / iPhone
 - UIフレームワーク: SwiftUI
 - 設計方針: Appleの標準UIに調和する、静かで精密なトレーニング記録体験
@@ -11,7 +11,7 @@
 
 ## 2. 目的
 
-GymLogの機能は維持したまま、画面ごとに分散している見た目と操作ルールを統一する。装飾による高級感ではなく、情報の優先順位、余白、文字組み、操作の予測しやすさによって、デザイン事務所が設計したような完成度を目指す。
+Workout Logの機能は維持したまま、画面ごとに分散している見た目と操作ルールを統一する。装飾による高級感ではなく、情報の優先順位、余白、文字組み、操作の予測しやすさによって、デザイン事務所が設計したような完成度を目指す。
 
 達成したい状態は次のとおり。
 
@@ -262,7 +262,7 @@ NavigationStack、TabView、List、Form、Picker、confirmationDialog、searchab
 
 #### 構成
 
-1. Large Navigation Title `GymLog`
+1. Large Navigation Title `Workout Log`
 2. 「今日のトレーニング」主要アクション
 3. 今月のミニカレンダー
 4. トレーニング負荷のMetricGroup
@@ -465,7 +465,7 @@ NavigationStack、TabView、List、Form、Picker、confirmationDialog、searchab
 
 ### 11.1 新設・整理する共通要素
 
-`GymLog/Utilities/DesignSystem.swift` をデザインの単一ソースとして使用し、次を定義する。
+`WorkoutLog/Utilities/DesignSystem.swift` をデザインの単一ソースとして使用し、次を定義する。
 
 - `AppColor`: セマンティックカラー
 - `AppSpacing`: 4-32ptの余白トークン

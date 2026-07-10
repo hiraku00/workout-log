@@ -16,6 +16,7 @@ build/
 
 # XcodeGen output
 GymLog.xcodeproj/
+WorkoutLog.xcodeproj/
 
 # Swift Package Manager
 .build/
