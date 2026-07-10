@@ -1,0 +1,227 @@
+import SwiftUI
+import SwiftData
+
+/// セット記録の行コンポーネント
+struct SetRowView: View {
+    let exerciseSet: ExerciseSet
+    let setNumber: Int
+    let previousWorkoutSet: ExerciseSet?
+    let onDelete: () -> Void
+    let onCopyWeight: (() -> Void)?
+    let onCopyReps: (() -> Void)?
+    let onCopyNote: (() -> Void)?
+
+    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @State private var showingWeightPicker = false
+    @State private var showingRepsPicker = false
+
+    private var weightOptions: [Double] {
+        [ExerciseSet.bodyweightValue] + Array(stride(from: 0.0, through: 250.0, by: 1.0))
+    }
+
+    private var weightDisplayValue: String {
+        if exerciseSet.isBodyweight { return "自重" }
+        let display = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+        return display.weightString(unit: "")
+    }
+
+    private var oneRM: Double {
+        exerciseSet.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: exerciseSet.weight, reps: exerciseSet.reps)
+    }
+
+    var body: some View {
+        @Bindable var exerciseSet = exerciseSet
+        VStack(alignment: .leading, spacing: 6) {
+            HStack(spacing: 8) {
+                Text("\(setNumber)")
+                    .font(AppFont.input)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 44)
+
+                pickerButton(
+                    value: weightDisplayValue,
+                    unit: exerciseSet.isBodyweight ? "" : weightUnit,
+                    copyAction: onCopyWeight
+                ) {
+                    showingWeightPicker = true
+                }
+                .frame(maxWidth: .infinity)
+
+                pickerButton(
+                    value: "\(exerciseSet.reps)",
+                    unit: "rep",
+                    copyAction: onCopyReps
+                ) {
+                    showingRepsPicker = true
+                }
+                .frame(maxWidth: .infinity)
+
+                Text(oneRM > 0 ? oneRM.weightString(unit: "") : "—")
+                    .font(AppFont.input)
+                    .foregroundStyle(.secondary)
+                    .monospacedDigit()
+                    .frame(width: 58)
+
+                Button(role: .destructive) {
+                    onDelete()
+                } label: {
+                    Image(systemName: "trash")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+                .frame(width: 44, height: 44)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(.vertical, 6)
+
+            ZStack(alignment: .trailing) {
+                TextField("Notes", text: $exerciseSet.comment)
+                    .font(AppFont.body)
+                    .padding(.leading, 12)
+                    .padding(.trailing, 52)
+
+                if let onCopyNote {
+                    Button(action: onCopyNote) {
+                        Image(systemName: "arrow.up.doc.fill")
+                            .font(AppFont.subheadline)
+                            .foregroundStyle(.primary)
+                            .frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .contentShape(Rectangle())
+                    .accessibilityLabel("前のメモをコピー")
+                }
+            }
+            .frame(maxWidth: .infinity)
+            .frame(height: 44)
+            .background(AppDesign.elevatedSurface)
+            .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
+            .overlay(
+                RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
+                    .stroke(AppDesign.hairline, lineWidth: 0.8)
+            )
+        }
+        .sheet(isPresented: $showingWeightPicker) {
+            wheelPickerSheet(
+                title: "重量",
+                isPresented: $showingWeightPicker,
+                selection: $exerciseSet.weight,
+                options: weightOptions
+            ) { val in
+                if val == ExerciseSet.bodyweightValue { return "自重" }
+                let display = weightUnit == "lbs" ? val * 2.20462 : val
+                return display.weightString(unit: weightUnit)
+            }
+        }
+        .sheet(isPresented: $showingRepsPicker) {
+            wheelPickerSheet(
+                title: "レップ数",
+                isPresented: $showingRepsPicker,
+                selection: Binding(
+                    get: { Double(exerciseSet.reps) },
+                    set: { exerciseSet.reps = Int($0) }
+                ),
+                options: Array(stride(from: 1.0, through: 50.0, by: 1.0))
+            ) { val in
+                "\(Int(val)) 回"
+            }
+        }
+    }
+
+    private func pickerButton(
+        value: String,
+        unit: String,
+        copyAction: (() -> Void)?,
+        action: @escaping () -> Void
+    ) -> some View {
+        HStack(spacing: 0) {
+            if let copyAction {
+                Button(action: copyAction) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(AppFont.caption)
+                        .foregroundStyle(.primary)
+                        .frame(width: 34, height: 44)
+                }
+                .buttonStyle(.plain)
+                .contentShape(Rectangle())
+                .accessibilityLabel("前のセットの値をコピー")
+            }
+
+            Button(action: action) {
+                HStack(spacing: 6) {
+                    Text(value)
+                        .font(AppFont.input)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                        .minimumScaleFactor(0.8)
+                    if !unit.isEmpty {
+                        Text(unit)
+                            .font(AppFont.caption2)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                .frame(maxWidth: .infinity, alignment: .trailing)
+                .padding(.horizontal, 6)
+                .frame(maxWidth: .infinity, minHeight: 44)
+            }
+            .buttonStyle(.plain)
+        }
+        .background(AppDesign.elevatedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
+                .stroke(AppDesign.hairline, lineWidth: 0.8)
+        )
+    }
+
+    private func wheelPickerSheet<T: BinaryFloatingPoint>(
+        title: String,
+        isPresented: Binding<Bool>,
+        selection: Binding<T>,
+        options: [T],
+        label: @escaping (T) -> String
+    ) -> some View where T.Stride: BinaryFloatingPoint {
+        NavigationStack {
+            Picker(title, selection: selection) {
+                ForEach(options, id: \.self) { val in
+                    Text(label(val)).tag(val)
+                }
+            }
+            .pickerStyle(.wheel)
+            .navigationTitle(title)
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("完了") {
+                        isPresented.wrappedValue = false
+                    }
+                    .fontWeight(.semibold)
+                }
+            }
+        }
+        .presentationDetents([.height(260)])
+    }
+}
+
+/// セット入力行のカラムヘッダー
+struct SetRowColumnHeader: View {
+    var body: some View {
+        HStack(spacing: 8) {
+            Text("セット")
+                .frame(width: 44)
+            Text("重量")
+                .frame(maxWidth: .infinity)
+            Text("回数")
+                .frame(maxWidth: .infinity)
+            Text("1RM")
+                .frame(width: 58)
+            Color.clear.frame(width: 44)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .font(AppFont.caption)
+        .fontWeight(.semibold)
+        .foregroundStyle(.secondary)
+        .padding(.vertical, 6)
+    }
+}

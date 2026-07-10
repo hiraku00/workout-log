@@ -1,0 +1,221 @@
+import SwiftUI
+import SwiftData
+
+/// ワークアウト詳細画面（コピー機能・履歴確認）
+struct WorkoutDetailView: View {
+    let workout: Workout
+    @Environment(WorkoutViewModel.self) private var viewModel
+    @Environment(\.modelContext) private var modelContext
+    @Environment(\.dismiss) private var dismiss
+
+    @State private var showingCopyConfirmation = false
+    @State private var showingActiveWorkout = false
+    @State private var showingEditConfirmation = false
+    @AppStorage("weightUnit") private var weightUnit = "kg"
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                // ヘッダー統計カード
+                statsCard
+
+                // アクションボタン
+                if !workout.isActive {
+                    VStack(spacing: 12) {
+                        editButton
+                        copyButton
+                    }
+                }
+
+                // 種目別記録リスト
+                ForEach(workout.sortedExercises) { exercise in
+                    ExerciseSummaryCard(workoutExercise: exercise)
+                }
+            }
+            .padding(.horizontal, 16)
+            .padding(.top, 16)
+            .padding(.bottom, 40)
+        }
+        .background(AppDesign.appBackground)
+        .navigationTitle(workout.date.formatted(.dateTime.year().month().day()))
+        .navigationBarTitleDisplayMode(.inline)
+        // コピー確認ダイアログ
+        .confirmationDialog(
+            "このワークアウトを今日にコピーしますか？\n前回と同じ重量・レップ数がセットされます。",
+            isPresented: $showingCopyConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("今日にコピーして開始") {
+                viewModel.copyWorkout(workout, context: modelContext)
+                showingActiveWorkout = true
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+        // アクティブワークアウト画面
+        .fullScreenCover(isPresented: $showingActiveWorkout) {
+            ActiveWorkoutView(targetDate: Date())
+        }
+    }
+
+    // MARK: - サブビュー
+
+    /// 記録を編集ボタン
+    private var editButton: some View {
+        Button {
+            showingEditConfirmation = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "pencil")
+                Text("記録を編集")
+                    .fontWeight(.bold)
+            }
+            .font(AppFont.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(AppPrimaryButtonStyle())
+        .confirmationDialog(
+            "この記録を編集しますか？",
+            isPresented: $showingEditConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("編集を開始") {
+                viewModel.reopenWorkout(workout)
+                showingActiveWorkout = true
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+    }
+
+    /// 統計サマリーカード
+    private var statsCard: some View {
+        VStack(spacing: 12) {
+            // 日付情報
+            HStack {
+                Label(workout.date.displayString, systemImage: "calendar")
+                    .font(AppFont.subheadline)
+                    .foregroundStyle(.secondary)
+                Spacer()
+            }
+
+            Divider()
+
+            // 統計の表示（種目数とボリュームに厳選）
+            HStack(spacing: 0) {
+                StatItem(
+                    value: "\(workout.workoutExercises.count)",
+                    label: "種目数",
+                    icon: "list.bullet",
+                    color: .indigo
+                )
+                Divider().frame(height: 36)
+                StatItem(
+                    value: "\(workout.totalSets)",
+                    label: "総セット",
+                    icon: "square.stack.fill",
+                    color: .blue
+                )
+                Divider().frame(height: 36)
+                StatItem(
+                    value: formattedVolume,
+                    label: "総ボリューム",
+                    icon: "scalemass.fill",
+                    color: .purple
+                )
+            }
+        }
+        .padding(16)
+        .appCard(cornerRadius: AppDesign.cornerLarge, padding: 16)
+    }
+
+    /// 今日にコピーボタン
+    private var copyButton: some View {
+        Button {
+            showingCopyConfirmation = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "doc.on.doc.fill")
+                Text("今日にコピーして開始")
+                    .fontWeight(.bold)
+            }
+            .font(AppFont.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(AppSecondaryButtonStyle())
+    }
+
+    private var formattedVolume: String {
+        let vol = weightUnit == "lbs" ? workout.totalVolume * 2.20462 : workout.totalVolume
+        return vol >= 1000
+            ? String(format: "%.1fk\(weightUnit)", vol / 1000)
+            : "\(Int(vol))\(weightUnit)"
+    }
+}
+
+// MARK: - 統計アイテム
+struct StatItem: View {
+    let value: String
+    let label: String
+    let icon: String
+    let color: Color
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(value)
+                .font(AppFont.title3)
+                .fontWeight(.bold)
+                .monospacedDigit()
+            Text(label)
+                .font(AppFont.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+    }
+}
+
+// MARK: - 種目サマリーカード
+struct ExerciseSummaryCard: View {
+    let workoutExercise: WorkoutExercise
+    @AppStorage("weightUnit") private var weightUnit = "kg"
+
+    var body: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            // 種目名ヘッダー
+            HStack(spacing: 10) {
+                if let template = workoutExercise.exerciseTemplate {
+                    VStack(alignment: .leading, spacing: 1) {
+                        Text(template.name)
+                            .font(AppFont.headline)
+                            .fontWeight(.bold)
+                        Text(template.muscleGroup)
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                }
+                Spacer()
+            }
+
+            // セット一覧（詳細表示）
+            VStack(spacing: 4) {
+                ForEach(Array(workoutExercise.sortedSets.enumerated()), id: \.element.id) { index, set in
+                    HStack {
+                        Text("\(index + 1) セット目")
+                            .font(AppFont.subheadline)
+                            .foregroundStyle(.secondary)
+
+                        Spacer()
+
+                        Text("\(set.weight.setWeightDisplay(unit: weightUnit)) × \(set.reps)回")
+                            .font(AppFont.subheadline)
+                            .fontWeight(.semibold)
+                    }
+                    .padding(.vertical, 4)
+                }
+            }
+        }
+        .padding(16)
+        .appCard(cornerRadius: AppDesign.cornerLarge, padding: 16)
+    }
+}

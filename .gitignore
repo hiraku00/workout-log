@@ -1,0 +1,39 @@
+# macOS
+.DS_Store
+
+# Xcode user data
+xcuserdata/
+*.xcuserstate
+*.xcscmblueprint
+*.xccheckout
+
+# Xcode build output
+DerivedData/
+build/
+*.ipa
+*.dSYM
+*.dSYM.zip
+
+# XcodeGen output
+GymLog.xcodeproj/
+
+# Swift Package Manager
+.build/
+.swiftpm/
+Package.resolved
+
+# Local tooling and logs
+build.log
+buildServer.json
+*.log
+
+# Local environment files
+.env
+.env.*
+*.local
+
+# Local databases and app data
+*.sqlite
+*.sqlite-shm
+*.sqlite-wal
+*.store

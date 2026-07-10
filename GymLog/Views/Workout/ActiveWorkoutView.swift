@@ -1,0 +1,522 @@
+import SwiftUI
+import SwiftData
+
+/// 種目詳細画面 - セット入力・休憩タイマー
+struct ExerciseDetailView: View {
+    let workoutExercise: WorkoutExercise
+    let allWorkouts: [Workout]
+
+    @Environment(\.modelContext) private var modelContext
+    @Environment(WorkoutViewModel.self) private var viewModel
+    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("restTimerDuration") private var timerDuration = 60
+
+    @State private var timerRunning = false
+    @State private var timerSeconds = 60
+    @State private var timer: Timer?
+    @State private var showingTimerDurationPicker = false
+
+    private let timerDurationOptions = Array(stride(from: 10, through: 300, by: 5))
+
+    var body: some View {
+        ScrollView {
+            VStack(spacing: 16) {
+                RestTimerBar(
+                    timerDuration: timerDuration,
+                    timerSeconds: timerSeconds,
+                    timerRunning: timerRunning,
+                    onStart: startTimer,
+                    onStop: stopTimer,
+                    onEditDuration: { showingTimerDurationPicker = true }
+                )
+
+                if let previousWorkoutInfo = previousWorkoutInfo {
+                    previousWorkoutSection(previousWorkoutInfo)
+                }
+
+                SetRowColumnHeader()
+                    .padding(.horizontal, 16)
+
+                ForEach(workoutExercise.sortedSets) { set in
+                    let setIndex = workoutExercise.sortedSets.firstIndex(where: { $0.id == set.id }) ?? 0
+                    let previousSetInWorkout = setIndex > 0 ? workoutExercise.sortedSets[setIndex - 1] : nil
+                    let previousWorkoutSet = previousWorkoutSet(at: setIndex)
+                    let noteSource = [previousSetInWorkout, previousWorkoutSet]
+                        .compactMap { $0 }
+                        .first { !$0.comment.isEmpty }
+
+                    SetRowView(
+                        exerciseSet: set,
+                        setNumber: setIndex + 1,
+                        previousWorkoutSet: previousWorkoutSet,
+                        onDelete: {
+                            withAnimation {
+                                viewModel.removeSet(set, from: workoutExercise, context: modelContext)
+                            }
+                            UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        },
+                        onCopyWeight: previousSetInWorkout.map { prev in
+                            { set.weight = prev.weight; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        },
+                        onCopyReps: previousSetInWorkout.map { prev in
+                            { set.reps = prev.reps; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        },
+                        onCopyNote: noteSource.map { source in
+                            { set.comment = source.comment; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        }
+                    )
+                    .padding(.horizontal, 16)
+                }
+
+                addSetButton
+            }
+            .padding(.top, 12)
+            .padding(.bottom, 40)
+        }
+        .background(AppDesign.appBackground)
+        .navigationTitle(workoutExercise.exerciseTemplate?.name ?? "種目詳細")
+        .navigationBarTitleDisplayMode(.inline)
+        .toolbar {
+            ToolbarItem(placement: .navigationBarTrailing) {
+                if let name = workoutExercise.exerciseTemplate?.name {
+                    Button {
+                        ExerciseReference.openImageSearch(for: name)
+                    } label: {
+                        HStack(spacing: 4) {
+                            Image(systemName: "photo.on.rectangle.angled")
+                            Text("フォームを確認")
+                        }
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .accessibilityLabel("\(name)の参考画像を検索")
+                }
+            }
+        }
+        .sheet(isPresented: $showingTimerDurationPicker) {
+            NavigationStack {
+                Picker("休憩時間", selection: $timerDuration) {
+                    ForEach(timerDurationOptions, id: \.self) { seconds in
+                        Text("\(seconds)秒").tag(seconds)
+                    }
+                }
+                .pickerStyle(.wheel)
+                .navigationTitle("休憩タイマー")
+                .navigationBarTitleDisplayMode(.inline)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("完了") {
+                            timerSeconds = timerDuration
+                            showingTimerDurationPicker = false
+                        }
+                        .fontWeight(.semibold)
+                    }
+                }
+            }
+            .presentationDetents([.height(260)])
+        }
+        .onDisappear {
+            stopTimer()
+        }
+    }
+
+    private var addSetButton: some View {
+        Button {
+            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+                viewModel.addSet(to: workoutExercise, context: modelContext)
+            }
+        } label: {
+            HStack(spacing: 6) {
+                Image(systemName: "plus")
+                Text("セットを追加")
+            }
+            .font(AppFont.subheadline)
+            .fontWeight(.semibold)
+            .foregroundStyle(Color.accentColor)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 12)
+        }
+        .padding(.horizontal, 12)
+    }
+
+    private func previousWorkoutSection(_ info: (date: Date, sets: [(weight: Double, reps: Int)])) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack {
+                Text("Last record")
+                    .font(AppFont.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+                Spacer()
+                Text(info.date.formatted(.dateTime.year().month().day()))
+                    .font(AppFont.caption)
+                    .foregroundStyle(.tertiary)
+            }
+
+            VStack(alignment: .leading, spacing: 4) {
+                ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
+                    HStack(spacing: 8) {
+                        Text("\(index + 1):")
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                            .frame(width: 20, alignment: .leading)
+                        Text(set.weight.setWeightDisplay(unit: weightUnit))
+                            .font(AppFont.caption)
+                            .fontWeight(.semibold)
+                        Text("×")
+                            .font(AppFont.caption)
+                            .foregroundStyle(.secondary)
+                        Text("\(set.reps) reps")
+                            .font(AppFont.caption)
+                            .fontWeight(.semibold)
+                    }
+                }
+            }
+        }
+        .padding(12)
+        .appCard(cornerRadius: AppDesign.cornerMedium, padding: 12)
+        .padding(.horizontal, 12)
+    }
+
+    private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {
+        guard let template = workoutExercise.exerciseTemplate else { return nil }
+        let currentWorkoutId = workoutExercise.workout?.id
+        let previousExercise = allWorkouts
+            .filter { $0.id != currentWorkoutId }
+            .sorted { $0.date > $1.date }
+            .first { workout in
+                workout.workoutExercises.contains { $0.exerciseTemplate?.id == template.id }
+            }
+            .flatMap { workout in
+                workout.workoutExercises.first { $0.exerciseTemplate?.id == template.id }
+            }
+
+        guard let prevExercise = previousExercise else { return nil }
+        let sets = prevExercise.sortedSets.map { (weight: $0.weight, reps: $0.reps) }
+        return (date: prevExercise.workout?.date ?? Date(), sets: sets)
+    }
+
+    private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
+        guard let template = workoutExercise.exerciseTemplate else { return nil }
+        let currentWorkoutId = workoutExercise.workout?.id
+        let previousExercise = allWorkouts
+            .filter { $0.id != currentWorkoutId }
+            .sorted { $0.date > $1.date }
+            .first { workout in
+                workout.workoutExercises.contains { $0.exerciseTemplate?.id == template.id }
+            }
+            .flatMap { workout in
+                workout.workoutExercises.first { $0.exerciseTemplate?.id == template.id }
+            }
+
+        let prevSets = previousExercise?.sortedSets ?? []
+        return index < prevSets.count ? prevSets[index] : prevSets.last
+    }
+
+    private func startTimer() {
+        timerRunning = true
+        timerSeconds = timerDuration
+        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
+            if timerSeconds > 0 {
+                timerSeconds -= 1
+            } else {
+                stopTimer()
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
+    }
+
+    private func stopTimer() {
+        timerRunning = false
+        timer?.invalidate()
+        timer = nil
+        timerSeconds = timerDuration
+    }
+}
+
+/// 休憩タイマーバー（添付アプリ風）
+struct RestTimerBar: View {
+    let timerDuration: Int
+    let timerSeconds: Int
+    let timerRunning: Bool
+    let onStart: () -> Void
+    let onStop: () -> Void
+    let onEditDuration: () -> Void
+
+    var body: some View {
+        HStack(spacing: 12) {
+            Label("休憩", systemImage: "timer")
+                .font(AppFont.subheadline).fontWeight(.semibold)
+
+            Spacer()
+
+            Button(action: onEditDuration) {
+                Text(TimeInterval(timerRunning ? timerSeconds : timerDuration).timerString)
+                    .font(AppFont.title3)
+                    .monospacedDigit()
+                    .frame(minWidth: 64)
+            }
+            .buttonStyle(.plain)
+            .disabled(timerRunning)
+
+            Button {
+                if timerRunning {
+                    onStop()
+                } else {
+                    onStart()
+                }
+            } label: {
+                Image(systemName: timerRunning ? "stop.fill" : "play.fill")
+            }
+            .buttonStyle(AppIconButtonStyle())
+            .accessibilityLabel(timerRunning ? "タイマーを停止" : "タイマーを開始")
+        }
+        .appCard(cornerRadius: AppDesign.cornerLarge, padding: 12)
+    }
+}
+
+/// 1日分のワークアウト内容（種目一覧）
+struct DayWorkoutContent: View {
+    let targetDate: Date
+
+    @Environment(WorkoutViewModel.self) private var viewModel
+    @Environment(\.modelContext) private var modelContext
+    @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
+    @AppStorage("weightUnit") private var weightUnit = "kg"
+
+    @State private var showingExercisePicker = false
+    @State private var showingDeleteConfirmation = false
+    @State private var showingCopyConfirmation = false
+    @State private var workout: Workout?
+
+    var body: some View {
+        VStack(spacing: 16) {
+            if let workout {
+                headerSummarySection(for: workout)
+
+                if workout.sortedExercises.isEmpty {
+                    emptyExercisePlaceholder
+                } else {
+                    ForEach(workout.sortedExercises) { exercise in
+                        NavigationLink {
+                            ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
+                        } label: {
+                            ExerciseRowView(workoutExercise: exercise)
+                        }
+                        .buttonStyle(.plain)
+                        .contextMenu {
+                            Button("削除", role: .destructive) {
+                                withAnimation {
+                                    viewModel.removeExercise(exercise, from: workout, context: modelContext)
+                                }
+                            }
+                        }
+                    }
+                }
+
+                addExerciseButton
+
+                if !Calendar.current.isDateInToday(targetDate), !workout.sortedExercises.isEmpty {
+                    copyToTodayButton(workout)
+                }
+
+                Button("この日の記録をすべて削除", role: .destructive) {
+                    showingDeleteConfirmation = true
+                }
+                .font(AppFont.caption)
+            } else {
+                emptyDayPlaceholder
+            }
+        }
+        .sheet(isPresented: $showingExercisePicker) {
+            ExercisePickerView { template in
+                // 種目を実際に選んだ時点で初めてワークアウトを作成する（キャンセル時に空の記録が残らないようにするため）
+                let target = workout ?? viewModel.getOrCreateWorkout(for: targetDate, context: modelContext)
+                workout = target
+                viewModel.addExercise(template, to: target, context: modelContext)
+                UIImpactFeedbackGenerator(style: .medium).impactOccurred()
+            }
+        }
+        .confirmationDialog(
+            "この日の記録をすべて削除しますか？",
+            isPresented: $showingDeleteConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("削除する", role: .destructive) {
+                if let workout {
+                    viewModel.cancelWorkout(workout, context: modelContext)
+                    self.workout = nil
+                }
+            }
+            Button("キャンセル", role: .cancel) {}
+        }
+        .onAppear {
+            ensureWorkout()
+        }
+    }
+
+    private func ensureWorkout() {
+        if workout == nil {
+            workout = viewModel.workout(for: targetDate, in: modelContext)
+        }
+    }
+
+    private func headerSummarySection(for workout: Workout) -> some View {
+        AppMetricGroup(items: [
+            AppMetricItem(value: "\(workout.workoutExercises.count)", label: "種目"),
+            AppMetricItem(value: "\(workout.totalSets)", label: "セット"),
+            AppMetricItem(value: "\(totalReps(for: workout))", label: "回数"),
+            AppMetricItem(value: formattedVolume(for: workout), label: "ボリューム")
+        ])
+    }
+
+    private var emptyExercisePlaceholder: some View {
+        AppEmptyState(
+            icon: "dumbbell",
+            title: "種目がありません",
+            message: "最初の種目を追加して記録を始めましょう"
+        )
+    }
+
+    private var emptyDayPlaceholder: some View {
+        VStack(spacing: 12) {
+            AppEmptyState(
+                icon: "calendar.badge.plus",
+                title: "この日の記録はありません",
+                message: "種目を追加するとトレーニングを開始できます"
+            )
+            addExerciseButton
+        }
+        .padding(.vertical, 16)
+    }
+
+    private var addExerciseButton: some View {
+        Button {
+            showingExercisePicker = true
+        } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "plus.circle.fill")
+                Text("種目を追加")
+            }
+            .font(AppFont.headline)
+            .fontWeight(.semibold)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 14)
+        }
+        .buttonStyle(AppSecondaryButtonStyle())
+    }
+
+    private func copyToTodayButton(_ workout: Workout) -> some View {
+        Button {
+            showingCopyConfirmation = true
+        } label: {
+            Label("今日にコピーして開始", systemImage: "doc.on.doc")
+                .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(AppPrimaryButtonStyle())
+        .confirmationDialog(
+            "この日のトレーニングを今日にコピーしますか？",
+            isPresented: $showingCopyConfirmation,
+            titleVisibility: .visible
+        ) {
+            Button("今日にコピー") {
+                viewModel.copyWorkout(workout, context: modelContext)
+                viewModel.openDayOnHome(Calendar.current.startOfDay(for: Date()))
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+            Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("種目、重量、回数、Notesをまとめてコピーします。")
+        }
+    }
+
+    private func totalReps(for workout: Workout) -> Int {
+        workout.workoutExercises.flatMap { $0.sets }.reduce(0) { $0 + $1.reps }
+    }
+
+    private func formattedVolume(for workout: Workout) -> String {
+        let vol = weightUnit == "lbs" ? workout.totalVolume * 2.20462 : workout.totalVolume
+        return vol >= 1000
+            ? String(format: "%.1fk", vol / 1000)
+            : String(format: "%.0f", vol)
+    }
+}
+
+/// 1日分のワークアウト画面（履歴カレンダーからの遷移先）
+/// 左右スワイプで前後の日付へシームレスに遷移できる。
+struct DayWorkoutView: View {
+    let targetDate: Date
+
+    @State private var currentDate: Date
+
+    init(targetDate: Date) {
+        self.targetDate = targetDate
+        self._currentDate = State(initialValue: Calendar.current.startOfDay(for: targetDate))
+    }
+
+    var body: some View {
+        TabView(selection: $currentDate) {
+            ForEach(dateRange(), id: \.self) { date in
+                ScrollView {
+                    DayWorkoutContent(targetDate: date)
+                        .padding(.horizontal, 16)
+                        .padding(.top, 12)
+                        .padding(.bottom, 40)
+                }
+                .tag(date)
+            }
+        }
+        .tabViewStyle(.page(indexDisplayMode: .never))
+        .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.86), value: currentDate)
+        .background(AppDesign.appBackground)
+        .navigationTitle(currentDate.formatted(.dateTime.year().month().day()))
+        .navigationBarTitleDisplayMode(.inline)
+    }
+
+    /// 前後365日分の日付を生成（スワイプで遷移できる範囲）
+    private func dateRange() -> [Date] {
+        let calendar = Calendar.current
+        let today = calendar.startOfDay(for: Date())
+        let start = calendar.date(byAdding: .day, value: -365, to: today) ?? today
+        let end = calendar.date(byAdding: .day, value: 30, to: today) ?? today
+
+        var dates: [Date] = []
+        var current = start
+        while current <= end {
+            dates.append(current)
+            current = calendar.date(byAdding: .day, value: 1, to: current) ?? end
+        }
+        return dates
+    }
+}
+
+// 後方互換の型名
+typealias ActiveWorkoutView = DayWorkoutView
+
+// MARK: - ヘッダー統計ボックス
+struct HeaderStatBox: View {
+    let title: String
+    let value: String
+
+    var body: some View {
+        VStack(spacing: 4) {
+            Text(title)
+                .font(AppFont.caption2)
+                .fontWeight(.bold)
+                .foregroundStyle(.secondary)
+
+            Text(value)
+                .font(AppFont.title3)
+                .fontWeight(.bold)
+                .foregroundStyle(.primary)
+                .monospacedDigit()
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.vertical, 10)
+        .background(AppDesign.elevatedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)
+                .stroke(AppDesign.hairline, lineWidth: 0.5)
+        )
+    }
+}
