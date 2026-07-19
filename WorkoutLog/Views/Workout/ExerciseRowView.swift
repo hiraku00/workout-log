@@ -5,6 +5,7 @@ import SwiftData
 struct ExerciseRowView: View {
     let workoutExercise: WorkoutExercise
     var onDelete: (() -> Void)? = nil
+    var onDeleteSet: ((ExerciseSet) -> Void)? = nil
     var embedded = false
 
     @AppStorage("weightUnit") private var weightUnit = "kg"
@@ -88,7 +89,22 @@ struct ExerciseRowView: View {
                             Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                                 .font(AppFont.caption)
                                 .foregroundStyle(set.isCompleted ? AppDesign.positive : Color.secondary)
-                                .frame(width: WorkoutRecordColumn.status)
+                                .frame(width: WorkoutRecordColumn.complete)
+
+                            if let onDeleteSet {
+                                Button(role: .destructive) {
+                                    onDeleteSet(set)
+                                } label: {
+                                    Image(systemName: "trash")
+                                        .font(AppFont.caption)
+                                        .foregroundStyle(.red)
+                                        .frame(width: WorkoutRecordColumn.delete, height: 32)
+                                }
+                                .buttonStyle(.borderless)
+                                .accessibilityLabel("セット\(index + 1)を削除")
+                            } else {
+                                Color.clear.frame(width: WorkoutRecordColumn.delete, height: 32)
+                            }
                         }
                         .padding(.vertical, 7)
                     }
@@ -116,7 +132,8 @@ struct ExerciseRowView: View {
             Text("重量").frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
             Text("回数").frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
             Text("1RM").frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
-            Text("完了").frame(width: WorkoutRecordColumn.status)
+            Text("完了").frame(width: WorkoutRecordColumn.complete)
+            Text("削除").frame(width: WorkoutRecordColumn.delete)
         }
         .font(AppFont.caption2)
         .fontWeight(.semibold)

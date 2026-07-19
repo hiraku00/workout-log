@@ -32,30 +32,15 @@ struct ExerciseDetailView: View {
 
                 ForEach(workoutExercise.sortedSets) { set in
                     let setIndex = workoutExercise.sortedSets.firstIndex(where: { $0.id == set.id }) ?? 0
-                    let previousSetInWorkout = setIndex > 0 ? workoutExercise.sortedSets[setIndex - 1] : nil
-                    let previousWorkoutSet = previousWorkoutSet(at: setIndex)
-                    let noteSource = [previousSetInWorkout, previousWorkoutSet]
-                        .compactMap { $0 }
-                        .first { !$0.comment.isEmpty }
 
                     SetRowView(
                         exerciseSet: set,
                         setNumber: setIndex + 1,
-                        previousWorkoutSet: previousWorkoutSet,
                         onDelete: {
                             withAnimation {
                                 viewModel.removeSet(set, from: workoutExercise, context: modelContext)
                             }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
-                        },
-                        onCopyWeight: previousSetInWorkout.map { prev in
-                            { set.weight = prev.weight; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                        },
-                        onCopyReps: previousSetInWorkout.map { prev in
-                            { set.reps = prev.reps; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                        },
-                        onCopyNote: noteSource.map { source in
-                            { set.comment = source.comment; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                         },
                         onCompleted: startTimer
                     )
@@ -201,7 +186,6 @@ struct ExerciseDetailView: View {
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
-                            Spacer().frame(width: WorkoutRecordColumn.status)
                         }
                         .frame(minHeight: 32)
                     }
@@ -226,11 +210,6 @@ struct ExerciseDetailView: View {
             .filter(\.isCompleted)
             .map { (weight: $0.weight, reps: $0.reps) }
         return (date: record.workout.date, sets: sets)
-    }
-
-    private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
-        let prevSets = previousWorkoutRecord?.exercise.sortedSets.filter(\.isCompleted) ?? []
-        return index < prevSets.count ? prevSets[index] : prevSets.last
     }
 
     private var previousWorkoutRecord: (workout: Workout, exercise: WorkoutExercise)? {
@@ -428,7 +407,16 @@ struct DayWorkoutContent: View {
             NavigationLink {
                 ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
             } label: {
-                ExerciseRowView(workoutExercise: exercise, embedded: true)
+                ExerciseRowView(
+                    workoutExercise: exercise,
+                    onDeleteSet: { set in
+                        withAnimation {
+                            viewModel.removeSet(set, from: exercise, context: modelContext)
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    },
+                    embedded: true
+                )
                     .frame(maxWidth: .infinity, alignment: .leading)
             }
             .buttonStyle(.plain)

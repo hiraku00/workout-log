@@ -124,11 +124,14 @@ extension Color {
 
 // MARK: - セット入力行レイアウト定数（列ズレ防止）
 enum SetRowLayout {
-    static let setNumber: CGFloat = 32
-    static let weight: CGFloat = 120
-    static let reps: CGFloat = 76
-    static let oneRM: CGFloat = 46
-    static let delete: CGFloat = 34
+    // iPhone 幅で「999.9 kg / 99 回 / 999.9 / 完了 / 削除」を
+    // 等しく読める密度で収める。入力・前回記録・一覧で共通に使う。
+    static let setNumber: CGFloat = 28
+    static let weight: CGFloat = 96
+    static let reps: CGFloat = 58
+    static let oneRM: CGFloat = 62
+    static let complete: CGFloat = 32
+    static let delete: CGFloat = 32
     static let spacing: CGFloat = 6
 }
 
@@ -138,7 +141,8 @@ enum WorkoutRecordColumn {
     static let weight: CGFloat = SetRowLayout.weight
     static let reps: CGFloat = SetRowLayout.reps
     static let oneRM: CGFloat = SetRowLayout.oneRM
-    static let status: CGFloat = SetRowLayout.delete
+    static let complete: CGFloat = SetRowLayout.complete
+    static let delete: CGFloat = SetRowLayout.delete
     static let spacing: CGFloat = SetRowLayout.spacing
 }
 
