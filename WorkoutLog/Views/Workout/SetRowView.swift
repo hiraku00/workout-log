@@ -67,18 +67,29 @@ struct SetRowView: View {
                 TextField("メモ（任意）", text: $exerciseSet.comment)
                     .font(AppFont.body)
                     .padding(.leading, 12)
-                    .padding(.trailing, 52)
+                    .padding(.trailing, 96)
 
-                if let onCopyNote {
-                    Button(action: onCopyNote) {
-                        Image(systemName: "arrow.up.doc.fill")
+                HStack(spacing: 0) {
+                    if let onCopyNote {
+                        Button(action: onCopyNote) {
+                            Image(systemName: "arrow.up.doc.fill")
+                                .font(AppFont.subheadline)
+                                .foregroundStyle(.primary)
+                                .frame(width: 44, height: 44)
+                        }
+                        .buttonStyle(.plain)
+                        .contentShape(Rectangle())
+                        .accessibilityLabel("前のメモをコピー")
+                    }
+
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
                             .font(AppFont.subheadline)
-                            .foregroundStyle(.primary)
+                            .foregroundStyle(.red)
                             .frame(width: 44, height: 44)
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("前のメモをコピー")
+                    .accessibilityLabel("セットを削除")
                 }
             }
             .frame(maxWidth: .infinity)
@@ -147,23 +158,6 @@ struct SetRowView: View {
                     .padding(.horizontal, 2)
             }
 
-            Menu {
-                if exerciseSet.isBodyweight {
-                    Button("重量入力へ戻す", systemImage: "number") {
-                        exerciseSet.weight = 0
-                    }
-                } else {
-                    Button("自重として記録", systemImage: "figure.strengthtraining.traditional") {
-                        exerciseSet.weight = ExerciseSet.bodyweightValue
-                    }
-                }
-            } label: {
-                Image(systemName: "ellipsis")
-                    .font(AppFont.caption)
-                    .foregroundStyle(.secondary)
-                    .frame(width: 22, height: 44)
-            }
-            .accessibilityLabel("重量入力のオプション")
         }
         .background(AppDesign.subtleFill)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
@@ -171,6 +165,18 @@ struct SetRowView: View {
             RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
                 .stroke(AppDesign.hairline, lineWidth: 0.8)
         )
+        .contextMenu {
+            if exerciseSet.isBodyweight {
+                Button("重量入力へ戻す", systemImage: "number") {
+                    exerciseSet.weight = 0
+                }
+            } else {
+                Button("自重として記録", systemImage: "figure.strengthtraining.traditional") {
+                    exerciseSet.weight = ExerciseSet.bodyweightValue
+                }
+            }
+        }
+        .accessibilityHint("長押しで自重入力に切り替えられます")
     }
 
     private func pickerButton(
