@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AudioToolbox
 
 /// 種目詳細画面 - セット入力・休憩タイマー
 struct ExerciseDetailView: View {
@@ -22,15 +23,6 @@ struct ExerciseDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                RestTimerBar(
-                    timerDuration: timerDuration,
-                    timerSeconds: timerSeconds,
-                    timerRunning: timerRunning,
-                    onStart: startTimer,
-                    onStop: stopTimer,
-                    onEditDuration: { showingTimerDurationPicker = true }
-                )
-
                 if let template = workoutExercise.exerciseTemplate {
                     previousWorkoutSection(template: template, info: previousWorkoutInfo)
                 }
@@ -76,6 +68,19 @@ struct ExerciseDetailView: View {
             .padding(.bottom, 40)
         }
         .background(AppScreenBackground())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            RestTimerBar(
+                timerDuration: timerDuration,
+                timerSeconds: timerSeconds,
+                timerRunning: timerRunning,
+                onStart: startTimer,
+                onStop: stopTimer,
+                onEditDuration: { showingTimerDurationPicker = true }
+            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(AppScreenBackground())
+        }
         .navigationTitle(workoutExercise.exerciseTemplate?.name ?? "種目詳細")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -170,22 +175,20 @@ struct ExerciseDetailView: View {
 
             if let info {
                 VStack(spacing: 0) {
-                    previousRecordColumnHeader
-
                     ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
                         Divider()
                         HStack(spacing: WorkoutRecordColumn.spacing) {
                             Text("\(index + 1)")
-                                .font(AppFont.caption)
+                                .font(AppFont.caption2)
                                 .foregroundStyle(.secondary)
                                 .frame(width: WorkoutRecordColumn.set, alignment: .leading)
                             Text(set.weight.setWeightDisplay(unit: weightUnit))
-                                .font(AppFont.subheadline)
+                                .font(AppFont.caption)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
                             Text("\(set.reps)回")
-                                .font(AppFont.subheadline)
+                                .font(AppFont.caption)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
@@ -194,13 +197,13 @@ struct ExerciseDetailView: View {
                                 ? 0
                                 : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
                             Text(estimatedOneRM > 0 ? estimatedOneRM.setWeightDisplay(unit: weightUnit) : "—")
-                                .font(AppFont.caption)
+                                .font(AppFont.caption2)
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
                             Spacer().frame(width: WorkoutRecordColumn.status)
                         }
-                        .padding(.vertical, 7)
+                        .frame(minHeight: 32)
                     }
                 }
                 .padding(.horizontal, 4)
@@ -215,22 +218,6 @@ struct ExerciseDetailView: View {
         }
         .appCard(cornerRadius: AppDesign.cornerMedium, padding: 12)
         .padding(.horizontal, 12)
-    }
-
-    private var previousRecordColumnHeader: some View {
-        HStack(spacing: WorkoutRecordColumn.spacing) {
-            Text("セット").frame(width: WorkoutRecordColumn.set, alignment: .leading)
-            Text("重量").frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
-            Text("回数").frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
-            Text("1RM").frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
-            Text("").frame(width: WorkoutRecordColumn.status)
-        }
-        .font(AppFont.caption2)
-        .fontWeight(.semibold)
-        .foregroundStyle(.secondary)
-        .lineLimit(1)
-        .minimumScaleFactor(0.7)
-        .padding(.vertical, 6)
     }
 
     private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {
@@ -285,7 +272,7 @@ struct ExerciseDetailView: View {
                 timerRunning = false
                 timer?.invalidate()
                 timer = nil
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                notifyTimerFinished()
             }
         }
         timer = nextTimer
@@ -297,6 +284,19 @@ struct ExerciseDetailView: View {
         timer?.invalidate()
         timer = nil
         timerSeconds = timerDuration
+    }
+
+    private func notifyTimerFinished() {
+        // 1回だけでは気づきにくいため、効果音と通知バイブを間隔を空けて3回鳴らす。
+        AudioServicesPlayAlertSound(1005)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        for delay in [0.65, 1.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                AudioServicesPlayAlertSound(1005)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
     }
 }
 
