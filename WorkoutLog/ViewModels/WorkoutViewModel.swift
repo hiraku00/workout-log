@@ -12,7 +12,10 @@ final class WorkoutViewModel {
     var homeNavigationDate: Date?
 
     /// 種目追加時に自動作成するセット数
-    private let defaultSetCount = 3
+    private var defaultSetCount: Int {
+        let stored = UserDefaults.standard.integer(forKey: "defaultSetCount")
+        return stored == 0 ? 3 : stored
+    }
 
     // MARK: - ワークアウト開始・終了
 
@@ -110,6 +113,7 @@ final class WorkoutViewModel {
 
     /// 種目をワークアウトに追加する（3セット分の枠を自動作成）
     func addExercise(_ template: ExerciseTemplate, to workout: Workout, context: ModelContext) {
+        guard !workout.workoutExercises.contains(where: { $0.exerciseTemplate?.id == template.id }) else { return }
         let order = workout.workoutExercises.count
         let workoutExercise = WorkoutExercise(order: order)
         workoutExercise.exerciseTemplate = template

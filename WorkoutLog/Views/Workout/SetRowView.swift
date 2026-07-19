@@ -10,13 +10,16 @@ struct SetRowView: View {
     let onCopyWeight: (() -> Void)?
     let onCopyReps: (() -> Void)?
     let onCopyNote: (() -> Void)?
+    let onCompleted: () -> Void
 
     @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightStep") private var weightStep = 1.0
     @State private var showingWeightPicker = false
     @State private var showingRepsPicker = false
 
     private var weightOptions: [Double] {
-        [ExerciseSet.bodyweightValue] + Array(stride(from: 0.0, through: 250.0, by: 1.0))
+        let internalStep = weightUnit == "lbs" ? weightStep / 2.20462 : weightStep
+        return [ExerciseSet.bodyweightValue] + Array(stride(from: 0.0, through: 250.0, by: internalStep))
     }
 
     private var weightDisplayValue: String {
@@ -49,7 +52,7 @@ struct SetRowView: View {
 
                 pickerButton(
                     value: "\(exerciseSet.reps)",
-                    unit: "rep",
+                    unit: "回",
                     copyAction: onCopyReps
                 ) {
                     showingRepsPicker = true
@@ -60,22 +63,25 @@ struct SetRowView: View {
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
+                    .contentTransition(.numericText())
                     .frame(width: 58)
 
-                Button(role: .destructive) {
-                    onDelete()
+                Button {
+                    exerciseSet.isCompleted.toggle()
+                    if exerciseSet.isCompleted { onCompleted() }
                 } label: {
-                    Image(systemName: "trash")
-                        .font(AppFont.caption)
-                        .foregroundStyle(.secondary)
+                    Image(systemName: exerciseSet.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 21))
+                        .foregroundStyle(exerciseSet.isCompleted ? AppDesign.accent : Color.secondary)
                 }
                 .frame(width: 44, height: 44)
+                .accessibilityLabel(exerciseSet.isCompleted ? "セット完了を取り消す" : "セットを完了")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 6)
 
             ZStack(alignment: .trailing) {
-                TextField("Notes", text: $exerciseSet.comment)
+                TextField("メモ（任意）", text: $exerciseSet.comment)
                     .font(AppFont.body)
                     .padding(.leading, 12)
                     .padding(.trailing, 52)
@@ -94,12 +100,21 @@ struct SetRowView: View {
             }
             .frame(maxWidth: .infinity)
             .frame(height: 44)
-            .background(AppDesign.elevatedSurface)
+            .background(AppDesign.subtleFill)
             .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
                     .stroke(AppDesign.hairline, lineWidth: 0.8)
             )
+        }
+        .padding(.horizontal, 8)
+        .padding(.vertical, 4)
+        .background(exerciseSet.isCompleted ? AppDesign.accentFill : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
+        .animation(.spring(response: 0.25, dampingFraction: 1), value: exerciseSet.isCompleted)
+        .sensoryFeedback(.success, trigger: exerciseSet.isCompleted)
+        .swipeActions(edge: .trailing) {
+            Button("削除", role: .destructive, action: onDelete)
         }
         .sheet(isPresented: $showingWeightPicker) {
             wheelPickerSheet(
@@ -167,7 +182,7 @@ struct SetRowView: View {
             }
             .buttonStyle(.plain)
         }
-        .background(AppDesign.elevatedSurface)
+        .background(AppDesign.subtleFill)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
@@ -216,7 +231,7 @@ struct SetRowColumnHeader: View {
                 .frame(maxWidth: .infinity)
             Text("1RM")
                 .frame(width: 58)
-            Color.clear.frame(width: 44)
+            Text("完了").frame(width: 44)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(AppFont.caption)

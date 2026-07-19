@@ -8,6 +8,7 @@ struct ExerciseDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutViewModel.self) private var viewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("weightUnit") private var weightUnit = "kg"
     @AppStorage("restTimerDuration") private var timerDuration = 60
 
@@ -63,7 +64,8 @@ struct ExerciseDetailView: View {
                         },
                         onCopyNote: noteSource.map { source in
                             { set.comment = source.comment; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                        }
+                        },
+                        onCompleted: startTimer
                     )
                     .padding(.horizontal, 16)
                 }
@@ -73,7 +75,7 @@ struct ExerciseDetailView: View {
             .padding(.top, 12)
             .padding(.bottom, 40)
         }
-        .background(AppDesign.appBackground)
+        .background(AppScreenBackground())
         .navigationTitle(workoutExercise.exerciseTemplate?.name ?? "種目詳細")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -122,7 +124,7 @@ struct ExerciseDetailView: View {
 
     private var addSetButton: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? .linear(duration: 0.12) : .spring(response: 0.3, dampingFraction: 1)) {
                 viewModel.addSet(to: workoutExercise, context: modelContext)
             }
         } label: {
@@ -142,7 +144,7 @@ struct ExerciseDetailView: View {
     private func previousWorkoutSection(_ info: (date: Date, sets: [(weight: Double, reps: Int)])) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Last record")
+                Text("前回の記録")
                     .font(AppFont.caption)
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
@@ -155,7 +157,7 @@ struct ExerciseDetailView: View {
             VStack(alignment: .leading, spacing: 4) {
                 ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
                     HStack(spacing: 8) {
-                        Text("\(index + 1):")
+                        Text("\(index + 1)")
                             .font(AppFont.caption)
                             .foregroundStyle(.secondary)
                             .frame(width: 20, alignment: .leading)
@@ -165,7 +167,7 @@ struct ExerciseDetailView: View {
                         Text("×")
                             .font(AppFont.caption)
                             .foregroundStyle(.secondary)
-                        Text("\(set.reps) reps")
+                        Text("\(set.reps)回")
                             .font(AppFont.caption)
                             .fontWeight(.semibold)
                     }
@@ -253,6 +255,8 @@ struct RestTimerBar: View {
                 Text(TimeInterval(timerRunning ? timerSeconds : timerDuration).timerString)
                     .font(AppFont.title3)
                     .monospacedDigit()
+                    .contentTransition(.numericText(countsDown: true))
+                    .foregroundStyle(timerRunning ? AppDesign.accent : Color.primary)
                     .frame(minWidth: 64)
             }
             .buttonStyle(.plain)
@@ -271,6 +275,7 @@ struct RestTimerBar: View {
             .accessibilityLabel(timerRunning ? "タイマーを停止" : "タイマーを開始")
         }
         .appCard(cornerRadius: AppDesign.cornerLarge, padding: 12)
+        .sensoryFeedback(.impact(weight: .light), trigger: timerRunning)
     }
 }
 
@@ -328,11 +333,13 @@ struct DayWorkoutContent: View {
             }
         }
         .sheet(isPresented: $showingExercisePicker) {
-            ExercisePickerView { template in
+            ExercisePickerView(existingTemplateIDs: Set(workout?.workoutExercises.compactMap { $0.exerciseTemplate?.id } ?? [])) { templates in
                 // 種目を実際に選んだ時点で初めてワークアウトを作成する（キャンセル時に空の記録が残らないようにするため）
                 let target = workout ?? viewModel.getOrCreateWorkout(for: targetDate, context: modelContext)
                 workout = target
-                viewModel.addExercise(template, to: target, context: modelContext)
+                for template in templates {
+                    viewModel.addExercise(template, to: target, context: modelContext)
+                }
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
         }
@@ -406,26 +413,24 @@ struct DayWorkoutContent: View {
     }
 
     private func copyToTodayButton(_ workout: Workout) -> some View {
-        Button {
-            showingCopyConfirmation = true
-        } label: {
-            Label("今日にコピーして開始", systemImage: "doc.on.doc")
+        Button { showingCopyConfirmation = true } label: {
+            Label("今日にコピーして開始", systemImage: "arrow.counterclockwise")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(AppPrimaryButtonStyle())
         .confirmationDialog(
-            "この日のトレーニングを今日にコピーしますか？",
+            "この日のメニューを今日の記録として開始しますか？",
             isPresented: $showingCopyConfirmation,
             titleVisibility: .visible
         ) {
-            Button("今日にコピー") {
+            Button("今日にコピーして開始") {
                 viewModel.copyWorkout(workout, context: modelContext)
                 viewModel.openDayOnHome(Calendar.current.startOfDay(for: Date()))
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("種目、重量、回数、Notesをまとめてコピーします。")
+            Text("種目・重量・回数を引き継ぎます。")
         }
     }
 
@@ -447,6 +452,7 @@ struct DayWorkoutView: View {
     let targetDate: Date
 
     @State private var currentDate: Date
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(targetDate: Date) {
         self.targetDate = targetDate
@@ -466,8 +472,8 @@ struct DayWorkoutView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.86), value: currentDate)
-        .background(AppDesign.appBackground)
+        .animation(reduceMotion ? .linear(duration: 0.15) : .spring(response: 0.4, dampingFraction: 1), value: currentDate)
+        .background(AppScreenBackground())
         .navigationTitle(currentDate.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
     }

@@ -13,6 +13,8 @@ final class ExerciseTemplate {
     var muscleGroup: String = ""
     /// ユーザーが追加したカスタム種目か
     var isCustom: Bool = false
+    /// 一覧から非表示にする。過去記録との関連は保持する。
+    var isArchived: Bool = false
 
     init(name: String, category: String, muscleGroup: String, isCustom: Bool = false) {
         self.name = name

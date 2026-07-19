@@ -8,9 +8,9 @@ struct WorkoutDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.dismiss) private var dismiss
 
-    @State private var showingCopyConfirmation = false
     @State private var showingActiveWorkout = false
     @State private var showingEditConfirmation = false
+    @State private var showingCopyConfirmation = false
     @AppStorage("weightUnit") private var weightUnit = "kg"
 
     var body: some View {
@@ -36,12 +36,11 @@ struct WorkoutDetailView: View {
             .padding(.top, 16)
             .padding(.bottom, 40)
         }
-        .background(AppDesign.appBackground)
+        .background(AppScreenBackground())
         .navigationTitle(workout.date.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
-        // コピー確認ダイアログ
         .confirmationDialog(
-            "このワークアウトを今日にコピーしますか？\n前回と同じ重量・レップ数がセットされます。",
+            "このメニューを今日のローテーションとして開始しますか？",
             isPresented: $showingCopyConfirmation,
             titleVisibility: .visible
         ) {
@@ -51,6 +50,8 @@ struct WorkoutDetailView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
             Button("キャンセル", role: .cancel) {}
+        } message: {
+            Text("種目・重量・回数を引き継ぎます。")
         }
         // アクティブワークアウト画面
         .fullScreenCover(isPresented: $showingActiveWorkout) {
@@ -86,6 +87,20 @@ struct WorkoutDetailView: View {
             }
             Button("キャンセル", role: .cancel) {}
         }
+    }
+
+    private var copyButton: some View {
+        Button { showingCopyConfirmation = true } label: {
+            HStack(spacing: 8) {
+                Image(systemName: "arrow.counterclockwise")
+                Text("今日のローテーションに使う")
+                    .fontWeight(.bold)
+            }
+            .font(AppFont.headline)
+            .frame(maxWidth: .infinity)
+            .padding(.vertical, 16)
+        }
+        .buttonStyle(AppSecondaryButtonStyle())
     }
 
     /// 統計サマリーカード
@@ -125,25 +140,7 @@ struct WorkoutDetailView: View {
                 )
             }
         }
-        .padding(16)
         .appCard(cornerRadius: AppDesign.cornerLarge, padding: 16)
-    }
-
-    /// 今日にコピーボタン
-    private var copyButton: some View {
-        Button {
-            showingCopyConfirmation = true
-        } label: {
-            HStack(spacing: 8) {
-                Image(systemName: "doc.on.doc.fill")
-                Text("今日にコピーして開始")
-                    .fontWeight(.bold)
-            }
-            .font(AppFont.headline)
-            .frame(maxWidth: .infinity)
-            .padding(.vertical, 16)
-        }
-        .buttonStyle(AppSecondaryButtonStyle())
     }
 
     private var formattedVolume: String {
@@ -215,7 +212,6 @@ struct ExerciseSummaryCard: View {
                 }
             }
         }
-        .padding(16)
         .appCard(cornerRadius: AppDesign.cornerLarge, padding: 16)
     }
 }
