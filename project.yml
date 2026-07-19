@@ -22,6 +22,8 @@ targets:
     platform: iOS
     sources:
       - path: WorkoutLog
+        excludes:
+          - Resources/Fonts
     settings:
       base:
         INFOPLIST_FILE: WorkoutLog/Info.plist
@@ -51,5 +53,14 @@ targets:
           UIApplicationSupportsMultipleScenes: false
           UISceneConfigurations: {}
         NSFaceIDUsageDescription: Face IDを使用してアプリへのアクセスを保護します
-        UIAppFonts:
-          - ipaexm.ttf
+  WorkoutLogTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: WorkoutLogTests
+    dependencies:
+      - target: WorkoutLog
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.hiraku.WorkoutLogTests
+        GENERATE_INFOPLIST_FILE: YES

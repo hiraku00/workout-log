@@ -24,6 +24,7 @@ struct WorkoutLogApp: App {
         WindowGroup {
             AppRootView()
                 .modelContainer(modelContainer)
+                .preferredColorScheme(.light)
         }
     }
 }
@@ -50,18 +51,26 @@ struct AppRootView: View {
             }
     }
 
-    /// プリセット種目が未登録の場合にデータベースへ投入する
+    /// 内蔵カタログとデータベースを同期する。廃止種目は履歴保護のためアーカイブする。
     private func seedExerciseTemplatesIfNeeded() {
-        guard exerciseTemplates.isEmpty else { return }
-
         for preset in ExercisePresets.all {
-            let template = ExerciseTemplate(
-                name: preset.name,
-                category: preset.category,
-                muscleGroup: preset.muscleGroup,
-                isCustom: false
-            )
-            modelContext.insert(template)
+            if let template = exerciseTemplates.first(where: { !$0.isCustom && $0.name == preset.name }) {
+                template.category = preset.category
+                template.muscleGroup = preset.muscleGroup
+                template.isArchived = false
+            } else {
+                modelContext.insert(ExerciseTemplate(
+                    name: preset.name,
+                    category: preset.category,
+                    muscleGroup: preset.muscleGroup,
+                    isCustom: false
+                ))
+            }
+        }
+
+        let activePresetNames = Set(ExercisePresets.all.map(\.name))
+        for template in exerciseTemplates where !template.isCustom && !activePresetNames.contains(template.name) {
+            template.isArchived = true
         }
 
         do {

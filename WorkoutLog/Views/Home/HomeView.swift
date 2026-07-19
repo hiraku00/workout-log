@@ -1,52 +1,57 @@
 import SwiftUI
 import SwiftData
 
-/// ホーム画面：統計ダッシュボード
+/// ホーム画面：月間の記録と今日の状態を静かに把握する
 struct HomeView: View {
     @Environment(WorkoutViewModel.self) private var viewModel
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
+    @AppStorage("weightUnit") private var weightUnit = "kg"
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
 
-    private var completedWorkouts: [Workout] {
-        allWorkouts.filter { !$0.isActive }
+    private let calendar = Calendar.current
+
+    private var summary: HomeWorkoutSummary {
+        WorkoutInsights.homeSummary(workouts: allWorkouts, calendar: calendar)
     }
 
     private var workoutDates: Set<String> {
-        let formatter = DateFormatter()
-        formatter.dateFormat = "yyyyMMdd"
-        return Set(completedWorkouts.map { formatter.string(from: $0.date) })
+        summary.workoutDates
     }
 
-    private var load7Days: Double {
-        let limit = Calendar.current.date(byAdding: .day, value: -7, to: Date()) ?? Date()
-        return completedWorkouts.filter { $0.date >= limit }.reduce(0.0) { $0 + $1.totalVolume } / 1000.0
-    }
-
-    private var load28Days: Double {
-        let limit = Calendar.current.date(byAdding: .day, value: -28, to: Date()) ?? Date()
-        return completedWorkouts.filter { $0.date >= limit }.reduce(0.0) { $0 + $1.totalVolume } / 1000.0
-    }
-
-    private var totalLoad: Double {
-        completedWorkouts.reduce(0.0) { $0 + $1.totalVolume } / 1000.0
+    private var previousWorkoutValue: String {
+        guard let previousWorkout = summary.previousWorkout else { return "なし" }
+        let previousDay = calendar.startOfDay(for: previousWorkout.date)
+        let today = calendar.startOfDay(for: Date())
+        let days = calendar.dateComponents([.day], from: previousDay, to: today).day ?? 0
+        return days == 1 ? "昨日" : "\(days)日前"
     }
 
     var body: some View {
         NavigationStack(path: $navigationPath) {
             ScrollView {
-                VStack(spacing: 18) {
-                    Text("Workout Log")
-                        .font(AppFont.largeTitle)
-                        .frame(maxWidth: .infinity, minHeight: 54, alignment: .leading)
-                        .accessibilityAddTraits(.isHeader)
-                    todayTrainingButton
+                VStack(spacing: 24) {
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(Date.now.displayString)
+                            .font(AppFont.subheadline)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(AppDesign.accent)
+                        Text("今日のトレーニング")
+                            .font(AppFont.largeTitle)
+                            .tracking(-0.7)
+                            .accessibilityAddTraits(.isHeader)
+                    }
+                    .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
                     dashboardSection
+                    activitySummary
+                    bestUpdatesSection
+                    todaySection
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 20)
                 .padding(.top, 16)
+                .padding(.bottom, 32)
             }
-            .background(AppDesign.appBackground)
+            .background(AppScreenBackground())
             .navigationTitle("")
             .navigationBarTitleDisplayMode(.inline)
             .navigationDestination(for: Date.self) { date in
@@ -61,66 +66,187 @@ struct HomeView: View {
         }
     }
 
-    private var todayTrainingButton: some View {
+    private var dashboardSection: some View {
         Button {
-            navigationPath.append(Calendar.current.startOfDay(for: Date()))
+            selectedTab = 1
         } label: {
-            HStack(spacing: 12) {
-                Image(systemName: "calendar.badge.plus")
-                    .font(AppFont.title3)
-                    .foregroundStyle(.primary)
-                    .frame(width: 38, height: 38)
-                    .background(AppDesign.subtleFill)
+            VStack(alignment: .leading, spacing: 8) {
+                HStack {
+                    Text(monthYearHeaderString)
+                        .font(AppFont.title3).fontWeight(.semibold)
+                    Spacer()
+                    Image(systemName: "chevron.right")
+                        .font(AppFont.caption)
+                        .fontWeight(.semibold)
+                        .foregroundStyle(.secondary)
+                }
+                CalendarGridView(workoutDates: workoutDates)
+            }
+            .padding(16)
+            .homeSurface()
+        }
+        .buttonStyle(AppPressableStyle())
+        .accessibilityLabel("\(monthYearHeaderString)のトレーニングカレンダーを履歴で開く")
+    }
+
+    private var activitySummary: some View {
+        HStack(spacing: 0) {
+            HomeMetric(value: "\(summary.thisWeekWorkoutCount)回", label: "今週")
+            Divider().frame(height: 34)
+            HomeMetric(value: previousWorkoutValue, label: "前回")
+
+            Divider().frame(height: 34)
+            HomeMetric(
+                value: summary.personalBestUpdates.isEmpty
+                    ? "更新なし"
+                    : "\(summary.personalBestUpdates.count)種目",
+                label: "ベスト更新"
+            )
+        }
+        .padding(.horizontal, 4)
+    }
+
+    @ViewBuilder
+    private var bestUpdatesSection: some View {
+        if !summary.personalBestUpdates.isEmpty {
+            VStack(alignment: .leading, spacing: 10) {
+                Text("ベスト更新")
+                    .font(AppFont.caption)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                VStack(spacing: 0) {
+                    ForEach(Array(summary.personalBestUpdates.enumerated()), id: \.element.id) { index, update in
+                        if index > 0 {
+                            Divider().padding(.leading, 42)
+                        }
+
+                        HStack(spacing: 12) {
+                            Image(systemName: "arrow.up.right")
+                                .font(.system(size: 13, weight: .semibold))
+                                .foregroundStyle(Color(.systemBackground))
+                                .frame(width: 30, height: 30)
+                                .background(AppDesign.accent)
+                                .clipShape(Circle())
+
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(update.exerciseName)
+                                    .font(AppFont.subheadline)
+                                    .fontWeight(.semibold)
+                                Text(bestUpdateDescription(update))
+                                    .font(AppFont.caption)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+
+                            Spacer()
+                        }
+                        .padding(.vertical, 11)
+                    }
+                }
+                .padding(.horizontal, 14)
+                .homeSurface()
+            }
+        }
+    }
+
+    private var todaySection: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Text("今日")
+                .font(AppFont.caption)
+                .fontWeight(.semibold)
+                .foregroundStyle(.secondary)
+
+            if let todayWorkout = summary.todayWorkout {
+                recordedTodayCard(todayWorkout)
+            } else {
+                emptyTodayCard
+            }
+        }
+    }
+
+    private func recordedTodayCard(_ workout: Workout) -> some View {
+        Button {
+            openToday()
+        } label: {
+            HStack(spacing: 14) {
+                Image(systemName: workout.isActive ? "circle.dotted" : "checkmark")
+                    .font(.system(size: 17, weight: .semibold))
+                    .foregroundStyle(workout.isActive ? Color.primary : Color(.systemBackground))
+                    .frame(width: 40, height: 40)
+                    .background(workout.isActive ? AppDesign.subtleFill : AppDesign.accent)
                     .clipShape(Circle())
 
-                VStack(alignment: .leading, spacing: 2) {
-                    Text("今日のトレーニング")
+                VStack(alignment: .leading, spacing: 4) {
+                    Text(workout.isActive ? "トレーニングを入力中" : "今日のトレーニング")
                         .font(AppFont.headline)
                         .fontWeight(.semibold)
-                    Text("今日の記録を入力・確認")
-                        .font(AppFont.caption)
+                    Text("\(workout.workoutExercises.count)種目・\(workout.totalSets)セット")
+                        .font(AppFont.subheadline)
                         .foregroundStyle(.secondary)
                 }
 
-                Spacer()
-                Image(systemName: "chevron.right")
+                Spacer(minLength: 8)
+
+                Text(workout.isActive ? "続ける" : "記録済み")
                     .font(AppFont.caption)
                     .fontWeight(.semibold)
+                    .foregroundStyle(.secondary)
+
+                Image(systemName: "chevron.right")
+                    .font(.system(size: 12, weight: .semibold))
                     .foregroundStyle(.tertiary)
             }
             .foregroundStyle(.primary)
-            .appCard(cornerRadius: AppDesign.cornerLarge, padding: 14)
+            .padding(16)
+            .homeSurface()
             .contentShape(Rectangle())
         }
-        .buttonStyle(.plain)
+        .buttonStyle(AppPressableStyle())
+        .accessibilityLabel("今日のトレーニング、\(workout.workoutExercises.count)種目、\(workout.totalSets)セット")
     }
 
-    private var dashboardSection: some View {
-        VStack(spacing: 16) {
-            Button {
-                selectedTab = 1
-            } label: {
-                VStack(alignment: .leading, spacing: 8) {
-                    HStack {
-                        Text(monthYearHeaderString)
-                            .font(AppFont.title3).fontWeight(.semibold)
-                        Spacer()
-                        Image(systemName: "chevron.right")
-                            .font(AppFont.caption)
-                            .fontWeight(.semibold)
-                            .foregroundStyle(.secondary)
-                    }
-                    CalendarGridView(workoutDates: workoutDates)
-                }
-                .appCard(cornerRadius: AppDesign.cornerLarge, padding: 14)
-            }
-            .buttonStyle(.plain)
+    private var emptyTodayCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 5) {
+                Text("今日はまだ記録がありません")
+                    .font(AppFont.headline)
+                    .fontWeight(.semibold)
 
-            AppMetricGroup(items: [
-                AppMetricItem(value: String(format: "%.2f t", load7Days), label: "7日間"),
-                AppMetricItem(value: String(format: "%.2f t", load28Days), label: "28日間"),
-                AppMetricItem(value: String(format: "%.2f t", totalLoad), label: "累計")
-            ])
+                if let previousWorkout = summary.previousWorkout {
+                    Text("前回は\(previousWorkout.date.monthDayString)・\(previousWorkout.workoutExercises.count)種目")
+                        .font(AppFont.subheadline)
+                        .foregroundStyle(.secondary)
+                } else {
+                    Text("最初の記録が、次回の基準になります")
+                        .font(AppFont.subheadline)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            Button { openToday() } label: {
+                Label("本日のトレーニングを開始", systemImage: "play.fill")
+                    .frame(maxWidth: .infinity)
+            }
+            .buttonStyle(AppPrimaryButtonStyle())
+        }
+        .padding(18)
+        .homeSurface()
+    }
+
+    private func openToday() {
+        navigationPath.append(calendar.startOfDay(for: Date()))
+    }
+
+    private func bestUpdateDescription(_ update: PersonalBestUpdate) -> String {
+        switch update.metric {
+        case .estimatedOneRM:
+            let factor = weightUnit == "lbs" ? 2.20462 : 1
+            let previous = update.previousValue * factor
+            let current = update.currentValue * factor
+            return String(format: "推定1RM %.1f → %.1f %@", previous, current, weightUnit)
+        case .bodyweightReps:
+            return "最大回数 \(Int(update.previousValue)) → \(Int(update.currentValue)) 回"
         }
     }
 
@@ -129,6 +255,48 @@ struct HomeView: View {
         formatter.dateFormat = "yyyy年M月"
         formatter.locale = Locale(identifier: "ja_JP")
         return formatter.string(from: Date())
+    }
+}
+
+private struct HomeMetric: View {
+    let value: String
+    let label: String
+
+    var body: some View {
+        VStack(spacing: 3) {
+            Text(value)
+                .font(AppFont.headline)
+                .fontWeight(.semibold)
+                .monospacedDigit()
+                .lineLimit(1)
+                .minimumScaleFactor(0.8)
+            Text(label)
+                .font(AppFont.caption2)
+                .foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
+        .accessibilityElement(children: .combine)
+    }
+}
+
+private struct HomeSurfaceModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
+    func body(content: Content) -> some View {
+        content
+            .background(reduceTransparency ? AnyShapeStyle(AppDesign.elevatedSurface) : AnyShapeStyle(.thinMaterial))
+            .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous))
+            .overlay {
+                RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous)
+                    .strokeBorder(AppDesign.materialEdge, lineWidth: 0.7)
+            }
+            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 6)
+    }
+}
+
+private extension View {
+    func homeSurface() -> some View {
+        modifier(HomeSurfaceModifier())
     }
 }
 
@@ -164,12 +332,12 @@ struct CalendarGridView: View {
     let workoutDates: Set<String>
 
     private let calendar = Calendar.current
-    private let weekdays = ["S", "M", "T", "W", "T", "F", "S"]
+    private let weekdays = ["月", "火", "水", "木", "金", "土", "日"]
 
     var body: some View {
         VStack(spacing: 6) {
             HStack(spacing: 0) {
-                ForEach(weekdays, id: \.self) { day in
+                ForEach(Array(weekdays.enumerated()), id: \.offset) { _, day in
                     Text(day)
                         .font(AppFont.caption2)
                         .fontWeight(.bold)
@@ -217,7 +385,7 @@ struct CalendarGridView: View {
         guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) else {
             return 0
         }
-        return calendar.component(.weekday, from: startOfMonth) - 1
+        return (calendar.component(.weekday, from: startOfMonth) + 5) % 7
     }
 
     private func hasWorkout(on date: Date) -> Bool {
@@ -254,8 +422,7 @@ struct RMCalculatorView: View {
                         .font(AppFont.subheadline)
                         .foregroundStyle(.secondary)
                     Text("\(displayOneRM.weightString(unit: weightUnit))")
-                        .font(.custom(AppFont.fontName, size: 48, relativeTo: .largeTitle))
-                        .fontWeight(.semibold)
+                        .font(.system(size: 48, weight: .bold, design: .rounded))
                         .monospacedDigit()
                 }
                 .frame(maxWidth: .infinity)

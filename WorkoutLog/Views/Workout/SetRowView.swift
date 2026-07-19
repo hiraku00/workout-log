@@ -5,25 +5,14 @@ import SwiftData
 struct SetRowView: View {
     let exerciseSet: ExerciseSet
     let setNumber: Int
-    let previousWorkoutSet: ExerciseSet?
     let onDelete: () -> Void
     let onCopyWeight: (() -> Void)?
     let onCopyReps: (() -> Void)?
     let onCopyNote: (() -> Void)?
+    let onCompleted: () -> Void
 
     @AppStorage("weightUnit") private var weightUnit = "kg"
-    @State private var showingWeightPicker = false
     @State private var showingRepsPicker = false
-
-    private var weightOptions: [Double] {
-        [ExerciseSet.bodyweightValue] + Array(stride(from: 0.0, through: 250.0, by: 1.0))
-    }
-
-    private var weightDisplayValue: String {
-        if exerciseSet.isBodyweight { return "自重" }
-        let display = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
-        return display.weightString(unit: "")
-    }
 
     private var oneRM: Double {
         exerciseSet.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: exerciseSet.weight, reps: exerciseSet.reps)
@@ -32,87 +21,107 @@ struct SetRowView: View {
     var body: some View {
         @Bindable var exerciseSet = exerciseSet
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            HStack(spacing: 0) {
                 Text("\(setNumber)")
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
-                    .frame(width: 44)
+                    .frame(width: SetRowLayout.setNumber)
 
-                pickerButton(
-                    value: weightDisplayValue,
-                    unit: exerciseSet.isBodyweight ? "" : weightUnit,
-                    copyAction: onCopyWeight
-                ) {
-                    showingWeightPicker = true
-                }
-                .frame(maxWidth: .infinity)
+                Spacer(minLength: SetRowLayout.minimumGap)
+
+                weightInput(exerciseSet: exerciseSet, copyAction: onCopyWeight)
+                    .frame(width: SetRowLayout.inputWeight)
+
+                Spacer(minLength: SetRowLayout.minimumGap)
 
                 pickerButton(
                     value: "\(exerciseSet.reps)",
-                    unit: "rep",
+                    unit: "回",
                     copyAction: onCopyReps
                 ) {
                     showingRepsPicker = true
                 }
-                .frame(maxWidth: .infinity)
+                .frame(width: SetRowLayout.inputReps)
+
+                Spacer(minLength: SetRowLayout.minimumGap)
 
                 Text(oneRM > 0 ? oneRM.weightString(unit: "") : "—")
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
-                    .frame(width: 58)
+                    .contentTransition(.numericText())
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                    .frame(width: SetRowLayout.oneRM)
 
-                Button(role: .destructive) {
-                    onDelete()
+                Spacer(minLength: SetRowLayout.minimumGap)
+
+                Button {
+                    exerciseSet.isCompleted.toggle()
+                    if exerciseSet.isCompleted { onCompleted() }
                 } label: {
-                    Image(systemName: "trash")
-                        .font(AppFont.caption)
-                        .foregroundStyle(.secondary)
+                    Image(systemName: exerciseSet.isCompleted ? "checkmark.circle.fill" : "circle")
+                        .font(.system(size: 21))
+                        .foregroundStyle(exerciseSet.isCompleted ? AppDesign.accent : Color.secondary)
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: SetRowLayout.complete, height: 40)
+                .accessibilityLabel(exerciseSet.isCompleted ? "セット完了を取り消す" : "セットを完了")
+
             }
             .frame(maxWidth: .infinity, alignment: .leading)
-            .padding(.vertical, 6)
+            .padding(.vertical, 2)
 
-            ZStack(alignment: .trailing) {
-                TextField("Notes", text: $exerciseSet.comment)
-                    .font(AppFont.body)
-                    .padding(.leading, 12)
-                    .padding(.trailing, 52)
+            GeometryReader { proxy in
+                let leading = SetRowLayout.setNumber + SetRowLayout.inputGap(for: proxy.size.width)
+                let noteCopyWidth = onCopyNote == nil ? 0 : SetRowLayout.delete
 
-                if let onCopyNote {
-                    Button(action: onCopyNote) {
-                        Image(systemName: "arrow.up.doc.fill")
+                HStack(spacing: 0) {
+                    Color.clear.frame(width: max(0, leading))
+
+                    TextField("メモ（任意）", text: $exerciseSet.comment)
+                        .font(AppFont.body)
+                        .padding(.horizontal, 12)
+                        .frame(width: max(0, proxy.size.width - leading - noteCopyWidth - SetRowLayout.delete), height: 36)
+                        .background(AppDesign.subtleFill)
+                        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
+                                .stroke(AppDesign.hairline, lineWidth: 0.8)
+                        )
+
+                    if let onCopyNote {
+                        Button(action: onCopyNote) {
+                            Image(systemName: "arrow.up.doc.fill")
+                                .font(AppFont.caption)
+                                .foregroundStyle(AppDesign.accent)
+                                .frame(width: noteCopyWidth, height: 36)
+                        }
+                        .buttonStyle(.plain)
+                        .accessibilityLabel("上のセットのメモをコピー")
+                    }
+
+                    Button(role: .destructive, action: onDelete) {
+                        Image(systemName: "trash")
                             .font(AppFont.subheadline)
-                            .foregroundStyle(.primary)
-                            .frame(width: 44, height: 44)
+                            .foregroundStyle(.red)
+                            .frame(width: SetRowLayout.delete, height: 36)
                     }
                     .buttonStyle(.plain)
-                    .contentShape(Rectangle())
-                    .accessibilityLabel("前のメモをコピー")
+                    .accessibilityLabel("セットを削除")
                 }
             }
-            .frame(maxWidth: .infinity)
-            .frame(height: 44)
-            .background(AppDesign.elevatedSurface)
-            .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
-            .overlay(
-                RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
-                    .stroke(AppDesign.hairline, lineWidth: 0.8)
-            )
+            .frame(height: 36)
         }
-        .sheet(isPresented: $showingWeightPicker) {
-            wheelPickerSheet(
-                title: "重量",
-                isPresented: $showingWeightPicker,
-                selection: $exerciseSet.weight,
-                options: weightOptions
-            ) { val in
-                if val == ExerciseSet.bodyweightValue { return "自重" }
-                let display = weightUnit == "lbs" ? val * 2.20462 : val
-                return display.weightString(unit: weightUnit)
-            }
+        .padding(.horizontal, 4)
+        .padding(.vertical, 3)
+        .background(exerciseSet.isCompleted ? AppDesign.accentFill : Color.clear)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
+        .animation(.spring(response: 0.25, dampingFraction: 1), value: exerciseSet.isCompleted)
+        .sensoryFeedback(.success, trigger: exerciseSet.isCompleted)
+        .swipeActions(edge: .trailing) {
+            Button("削除", role: .destructive, action: onDelete)
         }
+        .accessibilityHint("メモ欄右端のゴミ箱でセットを削除できます")
         .sheet(isPresented: $showingRepsPicker) {
             wheelPickerSheet(
                 title: "レップ数",
@@ -128,6 +137,56 @@ struct SetRowView: View {
         }
     }
 
+    private func weightInput(exerciseSet: ExerciseSet, copyAction: (() -> Void)?) -> some View {
+        HStack(spacing: 0) {
+            if let copyAction {
+                Button(action: copyAction) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppDesign.accent)
+                        .frame(width: 20, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("上のセットの重量をコピー")
+            }
+
+            if exerciseSet.isBodyweight {
+                Text("自重")
+                    .font(AppFont.input)
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity, minHeight: 40, alignment: .center)
+            } else {
+                WeightTextField(exerciseSet: exerciseSet, weightUnit: weightUnit)
+
+                Text(weightUnit)
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, 4)
+            }
+
+            Button {
+                exerciseSet.weight = exerciseSet.isBodyweight ? 0 : ExerciseSet.bodyweightValue
+            } label: {
+                Text(exerciseSet.isBodyweight ? "解除" : "自重")
+                    .font(AppFont.caption2)
+                    .fontWeight(.semibold)
+                    .foregroundStyle(exerciseSet.isBodyweight ? Color.white : AppDesign.accent)
+                    .frame(width: 34, height: 28)
+                    .background(exerciseSet.isBodyweight ? AppDesign.accent : Color.clear)
+                    .clipShape(Capsule())
+            }
+            .buttonStyle(.plain)
+            .accessibilityLabel(exerciseSet.isBodyweight ? "自重を解除" : "自重として記録")
+        }
+        .background(AppDesign.subtleFill)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
+                .stroke(AppDesign.hairline, lineWidth: 0.8)
+        )
+        .accessibilityHint(exerciseSet.isBodyweight ? "自重が選択されています。右端の自重ボタンで解除できます" : "数値を直接入力できます。右端の自重ボタンで切り替えられます")
+    }
+
     private func pickerButton(
         value: String,
         unit: String,
@@ -139,12 +198,11 @@ struct SetRowView: View {
                 Button(action: copyAction) {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(AppFont.caption)
-                        .foregroundStyle(.primary)
-                        .frame(width: 34, height: 44)
+                        .foregroundStyle(AppDesign.accent)
+                        .frame(width: 20, height: 40)
                 }
                 .buttonStyle(.plain)
-                .contentShape(Rectangle())
-                .accessibilityLabel("前のセットの値をコピー")
+                .accessibilityLabel("上のセットの回数をコピー")
             }
 
             Button(action: action) {
@@ -163,11 +221,11 @@ struct SetRowView: View {
                 }
                 .frame(maxWidth: .infinity, alignment: .trailing)
                 .padding(.horizontal, 6)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                .frame(maxWidth: .infinity, minHeight: 40)
             }
             .buttonStyle(.plain)
         }
-        .background(AppDesign.elevatedSurface)
+        .background(AppDesign.subtleFill)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
@@ -207,21 +265,78 @@ struct SetRowView: View {
 /// セット入力行のカラムヘッダー
 struct SetRowColumnHeader: View {
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: 0) {
             Text("セット")
-                .frame(width: 44)
+                .frame(width: SetRowLayout.setNumber)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("重量")
-                .frame(maxWidth: .infinity)
+                .frame(width: SetRowLayout.inputWeight)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("回数")
-                .frame(maxWidth: .infinity)
+                .frame(width: SetRowLayout.inputReps)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("1RM")
-                .frame(width: 58)
-            Color.clear.frame(width: 44)
+                .frame(width: SetRowLayout.oneRM)
+            Spacer(minLength: SetRowLayout.minimumGap)
+            Text("完了").frame(width: SetRowLayout.complete)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(AppFont.caption)
         .fontWeight(.semibold)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
         .padding(.vertical, 6)
+    }
+}
+
+/// 文字列を保持して小数点入力を確実に扱う重量フィールド。
+private struct WeightTextField: View {
+    let exerciseSet: ExerciseSet
+    let weightUnit: String
+
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("0", text: $text)
+            .font(AppFont.input)
+            .monospacedDigit()
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .focused($isFocused)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .onAppear { refreshText() }
+            .onChange(of: text) { _, newValue in updateWeight(from: newValue) }
+            .onChange(of: exerciseSet.weight) { _, _ in
+                if !isFocused { refreshText() }
+            }
+            .onChange(of: weightUnit) { _, _ in refreshText() }
+            .accessibilityLabel("重量を直接入力")
+    }
+
+    private func updateWeight(from input: String) {
+        let normalized = input
+            .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: "．", with: ".")
+        guard normalized.filter({ $0 == "." }).count <= 1,
+              let value = Double(normalized),
+              value >= 0 else { return }
+        exerciseSet.weight = weightUnit == "lbs" ? value / 2.20462 : value
+    }
+
+    private func refreshText() {
+        guard !exerciseSet.isBodyweight else { text = ""; return }
+        let value = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+        text = Self.formatted(value)
+    }
+
+    private static func formatted(_ value: Double) -> String {
+        let result = String(format: "%.2f", value)
+        return result
+            .replacingOccurrences(of: #"\.0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(\.[0-9]*?)0+$"#, with: "$1", options: .regularExpression)
     }
 }

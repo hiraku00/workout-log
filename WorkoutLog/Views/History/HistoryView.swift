@@ -6,19 +6,19 @@ import Charts
 struct HistoryView: View {
     @Query(sort: \Workout.date, order: .forward) private var allWorkouts: [Workout]
 
-    @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutViewModel.self) private var viewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Binding var mainTabSelection: Int
 
-    @State private var selectedCategory: String = "ALL"
+    @State private var selectedCategory: String = "すべて"
     @State private var selectedTab: String = "カレンダー"
-    @State private var selectedMonth: Date = {
-        let calendar = Calendar.current
-        let components = calendar.dateComponents([.year, .month], from: Date())
-        return calendar.date(from: components) ?? Date()
-    }()
+    // 月初に正規化した値だけを選択状態にする。時刻を含む Date() を使うと
+    // TabView の月初タグと一致せず、過去月が開くことがある。
+    @State private var selectedMonth: Date = Calendar.current.date(
+        from: Calendar.current.dateComponents([.year, .month], from: Date())
+    ) ?? Date()
 
-    private let categories = ["ALL", "胸", "背中", "脚", "肩", "腕", "体幹"]
+    private let categories = ["すべて", "胸", "背中", "脚", "肩", "腕", "体幹"]
     private let calendar = Calendar.current
 
     /// 完了済みワークアウトのみ (日付順)
@@ -28,7 +28,7 @@ struct HistoryView: View {
 
     /// 選択されたカテゴリに該当するワークアウトのみフィルタ
     private var filteredWorkouts: [Workout] {
-        if selectedCategory == "ALL" {
+        if selectedCategory == "すべて" {
             return completedWorkouts
         }
         return completedWorkouts.filter { workout in
@@ -74,9 +74,12 @@ struct HistoryView: View {
                     .padding(.bottom, 32)
                 }
             }
-            .background(AppDesign.appBackground)
+            .background(AppScreenBackground())
             .navigationTitle("履歴")
             .navigationBarTitleDisplayMode(.large)
+            .onAppear {
+                selectedMonth = normalizedMonth(selectedMonth)
+            }
         }
     }
 
@@ -86,7 +89,7 @@ struct HistoryView: View {
             HStack(spacing: 8) {
                 ForEach(categories, id: \.self) { cat in
                     Button {
-                        withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+                        withAnimation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.28, dampingFraction: 1)) {
                             selectedCategory = cat
                         }
                     } label: {
@@ -104,7 +107,8 @@ struct HistoryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(AppDesign.appBackground)
+        .background(.ultraThinMaterial)
+        .sensoryFeedback(.selection, trigger: selectedCategory)
     }
 
     // MARK: - 2. セグメントコントロール
@@ -114,7 +118,7 @@ struct HistoryView: View {
             segmentButton(title: "グラフ")
         }
         .padding(4)
-        .background(AppDesign.elevatedSurface)
+        .background(.thinMaterial)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)
@@ -126,7 +130,7 @@ struct HistoryView: View {
 
     private func segmentButton(title: String) -> some View {
         Button {
-            withAnimation(.spring(response: 0.2, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.28, dampingFraction: 1)) {
                 selectedTab = title
             }
         } label: {
@@ -146,16 +150,27 @@ struct HistoryView: View {
         VStack(spacing: 16) {
             // 月ヘッダー
             HStack {
-                Spacer()
+                Button { changeMonth(by: -1) } label: {
+                    Image(systemName: "chevron.left")
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("前の月")
+
                 Text(monthYearHeaderString(for: selectedMonth))
                     .font(AppFont.headline)
-                            .fontWeight(.semibold)
-                Spacer()
+                    .fontWeight(.semibold)
+                    .frame(maxWidth: .infinity)
+
+                Button { changeMonth(by: 1) } label: {
+                    Image(systemName: "chevron.right")
+                        .frame(width: 44, height: 44)
+                }
+                .accessibilityLabel("次の月")
             }
 
             // 曜日ラベル
             HStack(spacing: 0) {
-                let weekdays = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+                let weekdays = ["月", "火", "水", "木", "金", "土", "日"]
                 ForEach(weekdays, id: \.self) { day in
                     Text(day)
                         .font(AppFont.caption2)
@@ -175,14 +190,14 @@ struct HistoryView: View {
             }
             .frame(height: 280)
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.86), value: selectedMonth)
+            .animation(reduceMotion ? .linear(duration: 0.15) : .spring(response: 0.4, dampingFraction: 1), value: selectedMonth)
         }
         .appCard(cornerRadius: AppDesign.cornerLarge, padding: 16)
     }
 
     // 月範囲を生成（前後12ヶ月分）
     private func monthRange() -> [Date] {
-        let today = Date()
+        let today = normalizedMonth(Date())
         var months: [Date] = []
         for i in -12...12 {
             if let month = calendar.date(byAdding: .month, value: i, to: today) {
@@ -245,6 +260,8 @@ struct HistoryView: View {
                                 ? Circle().stroke(AppDesign.accent, lineWidth: 1.5)
                                 : nil
                         )
+                        .accessibilityLabel("\(monthYearHeaderString(for: month)) \(dayString)日")
+                        .accessibilityValue(isToday ? "今日" : (hasWorkout ? "記録あり" : "記録なし"))
                 }
             }
         }
@@ -268,17 +285,17 @@ struct HistoryView: View {
                                 x: .value("日付", shortDateString(for: workout.date)),
                                 y: .value("重量", workout.totalVolume)
                             )
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(AppDesign.accent)
 
                             PointMark(
                                 x: .value("日付", shortDateString(for: workout.date)),
                                 y: .value("重量", workout.totalVolume)
                             )
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(AppDesign.accent)
                             .symbolSize(40)
                             .annotation(position: .top) {
                                 Text(String(format: "%.0f", workout.totalVolume))
-                                    .font(.custom(AppFont.fontName, size: 8, relativeTo: .caption2))
+                                    .font(.system(.caption2, design: .rounded))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -306,26 +323,23 @@ struct HistoryView: View {
                 } else {
                     Chart {
                         ForEach(filteredWorkouts) { workout in
-                            let maxRM = workout.workoutExercises
-                                .flatMap { $0.sets }
-                                .map { $0.weight * (1.0 + Double($0.reps) / 30.0) }
-                                .max() ?? 0.0
+                            let maxRM = maxEstimatedOneRM(for: workout)
 
                             LineMark(
                                 x: .value("日付", shortDateString(for: workout.date)),
                                 y: .value("RM", maxRM)
                             )
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(AppDesign.accent)
 
                             PointMark(
                                 x: .value("日付", shortDateString(for: workout.date)),
                                 y: .value("RM", maxRM)
                             )
-                            .foregroundStyle(Color.primary)
+                            .foregroundStyle(AppDesign.accent)
                             .symbolSize(40)
                             .annotation(position: .top) {
                                 Text(String(format: "%.0f", maxRM))
-                                    .font(.custom(AppFont.fontName, size: 8, relativeTo: .caption2))
+                                    .font(.system(.caption2, design: .rounded))
                                     .foregroundStyle(.secondary)
                             }
                         }
@@ -345,6 +359,13 @@ struct HistoryView: View {
         }
     }
 
+    private func maxEstimatedOneRM(for workout: Workout) -> Double {
+        workout.completedSets
+            .filter { !$0.isBodyweight && $0.weight > 0 && $0.reps > 0 }
+            .map { $0.weight * (1.0 + Double($0.reps) / 30.0) }
+            .max() ?? 0
+    }
+
     private var emptyChartPlaceholder: some View {
         Text("記録データがありません")
             .font(AppFont.subheadline)
@@ -354,9 +375,13 @@ struct HistoryView: View {
 
     // MARK: - ヘルパー関数
     private func changeMonth(by value: Int) {
-        if let newMonth = calendar.date(byAdding: .month, value: value, to: selectedMonth) {
-            selectedMonth = newMonth
+        if let newMonth = calendar.date(byAdding: .month, value: value, to: normalizedMonth(selectedMonth)) {
+            selectedMonth = normalizedMonth(newMonth)
         }
+    }
+
+    private func normalizedMonth(_ date: Date) -> Date {
+        calendar.date(from: calendar.dateComponents([.year, .month], from: date)) ?? date
     }
 
     private func monthYearHeaderString(for date: Date) -> String {
@@ -389,7 +414,8 @@ struct HistoryView: View {
         guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: date)) else {
             return 0
         }
-        return calendar.component(.weekday, from: startOfMonth) - 1
+        // Calendar.component(.weekday) は日曜=1。月曜始まりへ変換する。
+        return (calendar.component(.weekday, from: startOfMonth) + 5) % 7
     }
 }
 

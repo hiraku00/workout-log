@@ -13,11 +13,20 @@ final class ExerciseTemplate {
     var muscleGroup: String = ""
     /// ユーザーが追加したカスタム種目か
     var isCustom: Bool = false
+    /// 一覧から非表示にする。過去記録との関連は保持する。
+    var isArchived: Bool = false
 
     init(name: String, category: String, muscleGroup: String, isCustom: Bool = false) {
         self.name = name
         self.category = category
         self.muscleGroup = muscleGroup
         self.isCustom = isCustom
+    }
+
+    /// プリセット再同期でIDが変わった履歴も、同じ内蔵種目として参照する。
+    /// カスタム種目は同名でも別種目になり得るためID一致だけを許可する。
+    func representsSameExercise(as other: ExerciseTemplate) -> Bool {
+        if id == other.id { return true }
+        return !isCustom && !other.isCustom && name == other.name
     }
 }

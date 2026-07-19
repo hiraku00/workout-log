@@ -1,5 +1,6 @@
 import SwiftUI
 import SwiftData
+import AudioToolbox
 
 /// 種目詳細画面 - セット入力・休憩タイマー
 struct ExerciseDetailView: View {
@@ -8,6 +9,7 @@ struct ExerciseDetailView: View {
 
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutViewModel.self) private var viewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("weightUnit") private var weightUnit = "kg"
     @AppStorage("restTimerDuration") private var timerDuration = 60
 
@@ -21,17 +23,8 @@ struct ExerciseDetailView: View {
     var body: some View {
         ScrollView {
             VStack(spacing: 16) {
-                RestTimerBar(
-                    timerDuration: timerDuration,
-                    timerSeconds: timerSeconds,
-                    timerRunning: timerRunning,
-                    onStart: startTimer,
-                    onStop: stopTimer,
-                    onEditDuration: { showingTimerDurationPicker = true }
-                )
-
-                if let previousWorkoutInfo = previousWorkoutInfo {
-                    previousWorkoutSection(previousWorkoutInfo)
+                if let template = workoutExercise.exerciseTemplate {
+                    previousWorkoutSection(template: template, info: previousWorkoutInfo)
                 }
 
                 SetRowColumnHeader()
@@ -48,22 +41,22 @@ struct ExerciseDetailView: View {
                     SetRowView(
                         exerciseSet: set,
                         setNumber: setIndex + 1,
-                        previousWorkoutSet: previousWorkoutSet,
                         onDelete: {
                             withAnimation {
                                 viewModel.removeSet(set, from: workoutExercise, context: modelContext)
                             }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
                         },
-                        onCopyWeight: previousSetInWorkout.map { prev in
-                            { set.weight = prev.weight; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        onCopyWeight: previousSetInWorkout.map { previousSet in
+                            { set.weight = previousSet.weight; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                         },
-                        onCopyReps: previousSetInWorkout.map { prev in
-                            { set.reps = prev.reps; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        onCopyReps: previousSetInWorkout.map { previousSet in
+                            { set.reps = previousSet.reps; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                         },
                         onCopyNote: noteSource.map { source in
                             { set.comment = source.comment; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
-                        }
+                        },
+                        onCompleted: startTimer
                     )
                     .padding(.horizontal, 16)
                 }
@@ -73,7 +66,20 @@ struct ExerciseDetailView: View {
             .padding(.top, 12)
             .padding(.bottom, 40)
         }
-        .background(AppDesign.appBackground)
+        .background(AppScreenBackground())
+        .safeAreaInset(edge: .top, spacing: 0) {
+            RestTimerBar(
+                timerDuration: timerDuration,
+                timerSeconds: timerSeconds,
+                timerRunning: timerRunning,
+                onStart: startTimer,
+                onStop: stopTimer,
+                onEditDuration: { showingTimerDurationPicker = true }
+            )
+            .padding(.horizontal, 12)
+            .padding(.vertical, 8)
+            .background(AppScreenBackground())
+        }
         .navigationTitle(workoutExercise.exerciseTemplate?.name ?? "種目詳細")
         .navigationBarTitleDisplayMode(.inline)
         .toolbar {
@@ -122,7 +128,7 @@ struct ExerciseDetailView: View {
 
     private var addSetButton: some View {
         Button {
-            withAnimation(.spring(response: 0.3, dampingFraction: 0.8)) {
+            withAnimation(reduceMotion ? .linear(duration: 0.12) : .spring(response: 0.3, dampingFraction: 1)) {
                 viewModel.addSet(to: workoutExercise, context: modelContext)
             }
         } label: {
@@ -139,90 +145,146 @@ struct ExerciseDetailView: View {
         .padding(.horizontal, 12)
     }
 
-    private func previousWorkoutSection(_ info: (date: Date, sets: [(weight: Double, reps: Int)])) -> some View {
+    private func previousWorkoutSection(
+        template: ExerciseTemplate,
+        info: (date: Date, sets: [(weight: Double, reps: Int)])?
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
-                Text("Last record")
-                    .font(AppFont.caption)
+                Text("前回の記録")
+                    .font(AppFont.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(info.date.formatted(.dateTime.year().month().day()))
-                    .font(AppFont.caption)
-                    .foregroundStyle(.tertiary)
-            }
 
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
-                    HStack(spacing: 8) {
-                        Text("\(index + 1):")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 20, alignment: .leading)
-                        Text(set.weight.setWeightDisplay(unit: weightUnit))
-                            .font(AppFont.caption)
-                            .fontWeight(.semibold)
-                        Text("×")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                        Text("\(set.reps) reps")
-                            .font(AppFont.caption)
-                            .fontWeight(.semibold)
-                    }
+                if let info {
+                    Text(info.date.displayString)
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                NavigationLink {
+                    ExerciseHistoryDetailView(template: template, workouts: historyWorkouts)
+                } label: {
+                    Label("履歴", systemImage: "clock.arrow.circlepath")
+                        .font(AppFont.caption)
+                        .fontWeight(.semibold)
                 }
             }
+
+            if let info {
+                VStack(spacing: 0) {
+                    ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
+                        Divider()
+                        HStack(spacing: 0) {
+                            Text("\(index + 1)")
+                                .font(AppFont.caption2)
+                                .foregroundStyle(.secondary)
+                                .frame(width: WorkoutRecordColumn.set, alignment: .leading)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+                            Text(set.weight.setWeightDisplay(unit: weightUnit))
+                                .font(AppFont.caption)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                                .frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+                            Text("\(set.reps)回")
+                                .font(AppFont.caption)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                                .frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+
+                            let estimatedOneRM = set.weight == ExerciseSet.bodyweightValue
+                                ? 0
+                                : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
+                            Text(estimatedOneRM > 0 ? estimatedOneRM.setWeightDisplay(unit: weightUnit) : "—")
+                                .font(AppFont.caption2)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+                            Color.clear.frame(width: WorkoutRecordColumn.complete)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+                            Color.clear.frame(width: WorkoutRecordColumn.delete)
+                        }
+                        .frame(minHeight: 32)
+                    }
+                }
+                .padding(.horizontal, 4)
+                .background(AppDesign.subtleFill)
+                .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
+            } else {
+                Text("この種目の過去記録はありません")
+                    .font(AppFont.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 6)
+            }
         }
-        .padding(12)
         .appCard(cornerRadius: AppDesign.cornerMedium, padding: 12)
         .padding(.horizontal, 12)
     }
 
     private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {
-        guard let template = workoutExercise.exerciseTemplate else { return nil }
-        let currentWorkoutId = workoutExercise.workout?.id
-        let previousExercise = allWorkouts
-            .filter { $0.id != currentWorkoutId }
-            .sorted { $0.date > $1.date }
-            .first { workout in
-                workout.workoutExercises.contains { $0.exerciseTemplate?.id == template.id }
-            }
-            .flatMap { workout in
-                workout.workoutExercises.first { $0.exerciseTemplate?.id == template.id }
-            }
-
-        guard let prevExercise = previousExercise else { return nil }
-        let sets = prevExercise.sortedSets.map { (weight: $0.weight, reps: $0.reps) }
-        return (date: prevExercise.workout?.date ?? Date(), sets: sets)
+        guard let record = previousWorkoutRecord else { return nil }
+        let sets = record.exercise.sortedSets
+            .filter(\.isCompleted)
+            .map { (weight: $0.weight, reps: $0.reps) }
+        return (date: record.workout.date, sets: sets)
     }
 
     private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
+        let previousSets = previousWorkoutRecord?.exercise.sortedSets.filter(\.isCompleted) ?? []
+        return index < previousSets.count ? previousSets[index] : previousSets.last
+    }
+
+    private var previousWorkoutRecord: (workout: Workout, exercise: WorkoutExercise)? {
         guard let template = workoutExercise.exerciseTemplate else { return nil }
         let currentWorkoutId = workoutExercise.workout?.id
-        let previousExercise = allWorkouts
-            .filter { $0.id != currentWorkoutId }
-            .sorted { $0.date > $1.date }
-            .first { workout in
-                workout.workoutExercises.contains { $0.exerciseTemplate?.id == template.id }
-            }
-            .flatMap { workout in
-                workout.workoutExercises.first { $0.exerciseTemplate?.id == template.id }
-            }
+        let currentDate = workoutExercise.workout?.date ?? .now
 
-        let prevSets = previousExercise?.sortedSets ?? []
-        return index < prevSets.count ? prevSets[index] : prevSets.last
+        for workout in allWorkouts
+            .filter({ !$0.isActive && $0.id != currentWorkoutId && $0.date < currentDate })
+            .sorted(by: { $0.date > $1.date }) {
+            if let exercise = matchingExercise(in: workout, template: template),
+               exercise.sortedSets.contains(where: \.isCompleted) {
+                return (workout, exercise)
+            }
+        }
+        return nil
+    }
+
+    private var historyWorkouts: [Workout] {
+        let currentWorkoutId = workoutExercise.workout?.id
+        return allWorkouts.filter { !$0.isActive && $0.id != currentWorkoutId }
+    }
+
+    private func matchingExercise(in workout: Workout, template: ExerciseTemplate) -> WorkoutExercise? {
+        workout.workoutExercises.first { exercise in
+            guard let candidate = exercise.exerciseTemplate else { return false }
+            return candidate.representsSameExercise(as: template)
+        }
     }
 
     private func startTimer() {
+        timer?.invalidate()
+        timer = nil
         timerRunning = true
         timerSeconds = timerDuration
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timerSeconds > 0 {
+
+        let nextTimer = Timer(timeInterval: 1.0, repeats: true) { _ in
+            if timerSeconds > 1 {
                 timerSeconds -= 1
             } else {
-                stopTimer()
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                timerSeconds = 0
+                timerRunning = false
+                timer?.invalidate()
+                timer = nil
+                notifyTimerFinished()
             }
         }
+        timer = nextTimer
+        RunLoop.main.add(nextTimer, forMode: .common)
     }
 
     private func stopTimer() {
@@ -230,6 +292,19 @@ struct ExerciseDetailView: View {
         timer?.invalidate()
         timer = nil
         timerSeconds = timerDuration
+    }
+
+    private func notifyTimerFinished() {
+        // 1回だけでは気づきにくいため、効果音と通知バイブを間隔を空けて3回鳴らす。
+        AudioServicesPlayAlertSound(1005)
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+
+        for delay in [0.65, 1.3] {
+            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
+                AudioServicesPlayAlertSound(1005)
+                UINotificationFeedbackGenerator().notificationOccurred(.success)
+            }
+        }
     }
 }
 
@@ -253,6 +328,8 @@ struct RestTimerBar: View {
                 Text(TimeInterval(timerRunning ? timerSeconds : timerDuration).timerString)
                     .font(AppFont.title3)
                     .monospacedDigit()
+                    .contentTransition(.numericText(countsDown: true))
+                    .foregroundStyle(timerRunning ? AppDesign.accent : Color.primary)
                     .frame(minWidth: 64)
             }
             .buttonStyle(.plain)
@@ -271,6 +348,7 @@ struct RestTimerBar: View {
             .accessibilityLabel(timerRunning ? "タイマーを停止" : "タイマーを開始")
         }
         .appCard(cornerRadius: AppDesign.cornerLarge, padding: 12)
+        .sensoryFeedback(.impact(weight: .light), trigger: timerRunning)
     }
 }
 
@@ -296,20 +374,8 @@ struct DayWorkoutContent: View {
                 if workout.sortedExercises.isEmpty {
                     emptyExercisePlaceholder
                 } else {
-                    ForEach(workout.sortedExercises) { exercise in
-                        NavigationLink {
-                            ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
-                        } label: {
-                            ExerciseRowView(workoutExercise: exercise)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("削除", role: .destructive) {
-                                withAnimation {
-                                    viewModel.removeExercise(exercise, from: workout, context: modelContext)
-                                }
-                            }
-                        }
+                    ForEach(Array(workout.sortedExercises.enumerated()), id: \.element.id) { index, exercise in
+                        exerciseListCard(exercise, at: index, in: workout)
                     }
                 }
 
@@ -328,11 +394,13 @@ struct DayWorkoutContent: View {
             }
         }
         .sheet(isPresented: $showingExercisePicker) {
-            ExercisePickerView { template in
+            ExercisePickerView(existingTemplateIDs: Set(workout?.workoutExercises.compactMap { $0.exerciseTemplate?.id } ?? [])) { templates in
                 // 種目を実際に選んだ時点で初めてワークアウトを作成する（キャンセル時に空の記録が残らないようにするため）
                 let target = workout ?? viewModel.getOrCreateWorkout(for: targetDate, context: modelContext)
                 workout = target
-                viewModel.addExercise(template, to: target, context: modelContext)
+                for template in templates {
+                    viewModel.addExercise(template, to: target, context: modelContext)
+                }
                 UIImpactFeedbackGenerator(style: .medium).impactOccurred()
             }
         }
@@ -360,11 +428,82 @@ struct DayWorkoutContent: View {
         }
     }
 
+    private func exerciseListCard(_ exercise: WorkoutExercise, at index: Int, in workout: Workout) -> some View {
+        ZStack(alignment: .topTrailing) {
+            NavigationLink {
+                ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
+            } label: {
+                ExerciseRowView(
+                    workoutExercise: exercise,
+                    onDeleteSet: { set in
+                        withAnimation {
+                            viewModel.removeSet(set, from: exercise, context: modelContext)
+                        }
+                        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                    },
+                    embedded: true
+                )
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+
+            HStack(spacing: 2) {
+                Button {
+                    withAnimation(.snappy) {
+                        viewModel.moveExercise(exercise, by: -1, in: workout)
+                    }
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .frame(width: 34, height: 34)
+                }
+                .disabled(index == 0)
+                .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を上へ移動")
+
+                Button {
+                    withAnimation(.snappy) {
+                        viewModel.moveExercise(exercise, by: 1, in: workout)
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 34, height: 34)
+                }
+                .disabled(index == workout.sortedExercises.count - 1)
+                .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を下へ移動")
+            }
+            .font(AppFont.subheadline)
+            .fontWeight(.semibold)
+            .padding(.top, 16)
+            .padding(.trailing, 10)
+        }
+        .background(AppDesign.elevatedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous)
+                .stroke(AppDesign.hairline, lineWidth: 0.5)
+        )
+        .contextMenu {
+            Button("上へ移動", systemImage: "chevron.up") {
+                viewModel.moveExercise(exercise, by: -1, in: workout)
+            }
+            .disabled(index == 0)
+            Button("下へ移動", systemImage: "chevron.down") {
+                viewModel.moveExercise(exercise, by: 1, in: workout)
+            }
+            .disabled(index == workout.sortedExercises.count - 1)
+            Button("削除", role: .destructive) {
+                withAnimation {
+                    viewModel.removeExercise(exercise, from: workout, context: modelContext)
+                }
+            }
+        }
+    }
+
     private func headerSummarySection(for workout: Workout) -> some View {
-        AppMetricGroup(items: [
-            AppMetricItem(value: "\(workout.workoutExercises.count)", label: "種目"),
+        return AppMetricGroup(items: [
+            AppMetricItem(value: "\(workout.completedExerciseCount)", label: "種目"),
             AppMetricItem(value: "\(workout.totalSets)", label: "セット"),
-            AppMetricItem(value: "\(totalReps(for: workout))", label: "回数"),
+            AppMetricItem(value: "\(workout.totalReps)", label: "回数"),
             AppMetricItem(value: formattedVolume(for: workout), label: "ボリューム")
         ])
     }
@@ -406,31 +545,25 @@ struct DayWorkoutContent: View {
     }
 
     private func copyToTodayButton(_ workout: Workout) -> some View {
-        Button {
-            showingCopyConfirmation = true
-        } label: {
-            Label("今日にコピーして開始", systemImage: "doc.on.doc")
+        Button { showingCopyConfirmation = true } label: {
+            Label("今日にコピーして開始", systemImage: "arrow.counterclockwise")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(AppPrimaryButtonStyle())
         .confirmationDialog(
-            "この日のトレーニングを今日にコピーしますか？",
+            "この日のメニューを今日の記録として開始しますか？",
             isPresented: $showingCopyConfirmation,
             titleVisibility: .visible
         ) {
-            Button("今日にコピー") {
+            Button("今日にコピーして開始") {
                 viewModel.copyWorkout(workout, context: modelContext)
                 viewModel.openDayOnHome(Calendar.current.startOfDay(for: Date()))
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
-            Text("種目、重量、回数、Notesをまとめてコピーします。")
+            Text("種目・重量・回数を引き継ぎます。")
         }
-    }
-
-    private func totalReps(for workout: Workout) -> Int {
-        workout.workoutExercises.flatMap { $0.sets }.reduce(0) { $0 + $1.reps }
     }
 
     private func formattedVolume(for workout: Workout) -> String {
@@ -447,6 +580,7 @@ struct DayWorkoutView: View {
     let targetDate: Date
 
     @State private var currentDate: Date
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     init(targetDate: Date) {
         self.targetDate = targetDate
@@ -466,8 +600,8 @@ struct DayWorkoutView: View {
             }
         }
         .tabViewStyle(.page(indexDisplayMode: .never))
-        .animation(.interactiveSpring(response: 0.35, dampingFraction: 0.86), value: currentDate)
-        .background(AppDesign.appBackground)
+        .animation(reduceMotion ? .linear(duration: 0.15) : .spring(response: 0.4, dampingFraction: 1), value: currentDate)
+        .background(AppScreenBackground())
         .navigationTitle(currentDate.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
     }

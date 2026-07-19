@@ -22,10 +22,6 @@
 	<string>1</string>
 	<key>NSFaceIDUsageDescription</key>
 	<string>Face IDを使用してアプリへのアクセスを保護します</string>
-	<key>UIAppFonts</key>
-	<array>
-		<string>ipaexm.ttf</string>
-	</array>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

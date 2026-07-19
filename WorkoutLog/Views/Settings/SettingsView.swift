@@ -4,6 +4,8 @@ import SwiftData
 /// 設定画面
 struct SettingsView: View {
     @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("defaultSetCount") private var defaultSetCount = 3
+    @AppStorage("restTimerDuration") private var restTimerDuration = 60
     @Query private var allWorkouts: [Workout]
     @Environment(\.modelContext) private var modelContext
     @State private var showingDeleteAllConfirm = false
@@ -24,6 +26,8 @@ struct SettingsView: View {
                 // 統計サマリー
                 Section("あなたの記録") {
                     statsRow
+                        .listRowBackground(Color.clear)
+                        .listRowInsets(EdgeInsets())
                 }
 
                 // 単位設定
@@ -34,6 +38,15 @@ struct SettingsView: View {
                     }
                     .pickerStyle(.segmented)
                     .padding(.vertical, 4)
+                }
+
+                Section("トレーニング") {
+                    Stepper("既定セット数：\(defaultSetCount)", value: $defaultSetCount, in: 1...10)
+                    Picker("休憩時間", selection: $restTimerDuration) {
+                        ForEach([30, 45, 60, 75, 90, 120, 180], id: \.self) { seconds in
+                            Text("\(seconds)秒").tag(seconds)
+                        }
+                    }
                 }
 
                 // アプリ情報
@@ -69,7 +82,7 @@ struct SettingsView: View {
                 }
             }
             .scrollContentBackground(.hidden)
-            .background(AppDesign.appBackground)
+            .background(AppScreenBackground())
             .navigationTitle("設定")
             .navigationBarTitleDisplayMode(.large)
             .confirmationDialog(
@@ -99,7 +112,8 @@ struct SettingsView: View {
                 label: "ボリューム \(weightUnit)"
             )
         }
-        .padding(.vertical, 12)
+        .padding(18)
+        .appCard(cornerRadius: AppDesign.cornerHero, padding: 0)
     }
 
     private func settingsMetric(value: String, label: String) -> some View {

@@ -7,6 +7,7 @@ struct DayDetailView: View {
     @Query(sort: \Workout.date, order: .forward) private var allWorkouts: [Workout]
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutViewModel.self) private var viewModel
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     /// カレンダーで選択した日付（最初に表示する基準日）
     let initialDate: Date
@@ -52,19 +53,19 @@ struct DayDetailView: View {
                 }
             }
             .tabViewStyle(.page(indexDisplayMode: .never))
-            .animation(.interactiveSpring(), value: currentDate)
+            .animation(reduceMotion ? .linear(duration: 0.15) : .spring(response: 0.4, dampingFraction: 1), value: currentDate)
         }
         .navigationBarTitleDisplayMode(.inline)
         .navigationTitle(dateHeaderString(for: currentDate))
-        .background(Color(.systemBackground))
+        .background(AppScreenBackground())
     }
 
     // MARK: - ヘッダーバー（統計カード）
     private var headerBar: some View {
         let workout = workoutForCurrentDate
-        let exercises = workout?.workoutExercises.count ?? 0
+        let exercises = workout?.completedExerciseCount ?? 0
         let sets = workout?.totalSets ?? 0
-        let reps = workout?.workoutExercises.flatMap { $0.sets }.reduce(0) { $0 + $1.reps } ?? 0
+        let reps = workout?.totalReps ?? 0
         let volume = workout?.totalVolume ?? 0.0
 
         return AppMetricGroup(items: [
@@ -75,7 +76,7 @@ struct DayDetailView: View {
         ])
         .padding(.horizontal, 16)
         .padding(.vertical, 10)
-        .background(AppDesign.appBackground)
+        .background(AppScreenBackground())
     }
 
     // MARK: - ヘルパー
@@ -189,7 +190,7 @@ struct DayPageView: View {
             .padding(.horizontal, 40)
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity)
-        .background(AppDesign.appBackground)
+        .background(AppScreenBackground())
     }
 }
 
@@ -202,7 +203,7 @@ struct DayStatCard: View {
     var body: some View {
         VStack(spacing: 4) {
             Text(title)
-                .font(.custom(AppFont.fontName, size: 9, relativeTo: .caption2))
+                .font(.system(.caption2, design: .default))
                 .fontWeight(.bold)
                 .foregroundStyle(.secondary)
             Text(value)

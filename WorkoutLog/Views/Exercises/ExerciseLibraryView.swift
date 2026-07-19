@@ -21,7 +21,7 @@ struct ExerciseLibraryView: View {
     }
 
     private var filteredTemplates: [ExerciseTemplate] {
-        var result = allTemplates
+        var result = allTemplates.filter { !$0.isArchived }
         if let category = selectedCategory {
             result = result.filter { $0.category == category }
         }
@@ -36,7 +36,7 @@ struct ExerciseLibraryView: View {
             return [("検索結果", filteredTemplates)]
         }
         return ExercisePresets.categories.compactMap { cat in
-            let items = allTemplates.filter { $0.category == cat }
+            let items = allTemplates.filter { !$0.isArchived && $0.category == cat }
             return items.isEmpty ? nil : (cat, items)
         }
     }
@@ -52,10 +52,15 @@ struct ExerciseLibraryView: View {
                     ForEach(groupedTemplates, id: \.0) { category, templates in
                         Section {
                             ForEach(templates) { template in
-                                LibraryExerciseRow(
-                                    template: template,
-                                    personalRecord: personalRecord(for: template)
-                                )
+                                NavigationLink {
+                                    ExerciseHistoryDetailView(template: template, workouts: completedWorkouts)
+                                } label: {
+                                    LibraryExerciseRow(
+                                        template: template,
+                                        personalRecord: personalRecord(for: template),
+                                        bestReps: bestReps(for: template)
+                                    )
+                                }
                                 .swipeActions(edge: .trailing) {
                                     if template.isCustom {
                                         Button(role: .destructive) {
@@ -84,7 +89,7 @@ struct ExerciseLibraryView: View {
                 }
                 .listStyle(.insetGrouped)
             }
-            .background(AppDesign.appBackground)
+            .background(AppScreenBackground())
             .navigationTitle("種目ライブラリ")
             .navigationBarTitleDisplayMode(.large)
             .searchable(text: $searchText, prompt: "種目を検索")
@@ -144,7 +149,7 @@ struct ExerciseLibraryView: View {
                         showingAddCustom = false
                     }
                     .fontWeight(.semibold)
-                    .disabled(customExerciseName.trimmingCharacters(in: .whitespaces).isEmpty)
+                    .disabled(!canAddCustomExercise)
                 }
             }
         }
@@ -160,6 +165,11 @@ struct ExerciseLibraryView: View {
         modelContext.insert(template)
         customExerciseName = ""
         customExerciseMuscle = ""
+    }
+
+    private var canAddCustomExercise: Bool {
+        let name = customExerciseName.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !name.isEmpty && !allTemplates.contains { $0.name.localizedCaseInsensitiveCompare(name) == .orderedSame }
     }
 
     // MARK: - カテゴリフィルター
@@ -189,7 +199,8 @@ struct ExerciseLibraryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(AppDesign.appBackground)
+        .background(.ultraThinMaterial)
+        .sensoryFeedback(.selection, trigger: selectedCategory)
     }
 
     /// 指定種目のPR（最高重量）を取得
@@ -197,8 +208,18 @@ struct ExerciseLibraryView: View {
         completedWorkouts
             .flatMap { $0.workoutExercises }
             .filter { $0.exerciseTemplate?.id == template.id }
-            .flatMap { $0.sets }
+            .flatMap { $0.sets.filter(\.isCompleted) }
             .map { $0.weight }
+            .max() ?? 0
+    }
+
+    private func bestReps(for template: ExerciseTemplate) -> Int {
+        completedWorkouts
+            .flatMap { $0.workoutExercises }
+            .filter { $0.exerciseTemplate?.id == template.id }
+            .flatMap { $0.sets.filter(\.isCompleted) }
+            .filter(\.isBodyweight)
+            .map(\.reps)
             .max() ?? 0
     }
 }
@@ -207,6 +228,7 @@ struct ExerciseLibraryView: View {
 struct LibraryExerciseRow: View {
     let template: ExerciseTemplate
     let personalRecord: Double
+    let bestReps: Int
     @AppStorage("weightUnit") private var weightUnit = "kg"
 
     var body: some View {
@@ -248,14 +270,21 @@ struct LibraryExerciseRow: View {
             Spacer()
 
             // PR表示
-            if personalRecord > 0 {
+            if bestReps > 0 {
+                VStack(alignment: .trailing, spacing: 1) {
+                    Text("\(bestReps)回")
+                        .font(AppFont.subheadline).fontWeight(.bold)
+                    Text("自己ベスト")
+                        .font(AppFont.caption2).foregroundStyle(.secondary)
+                }
+            } else if personalRecord > 0 {
                 VStack(alignment: .trailing, spacing: 1) {
                     let display = weightUnit == "lbs" ? personalRecord * 2.20462 : personalRecord
                     Text(display.weightString(unit: weightUnit))
                         .font(AppFont.subheadline)
                         .fontWeight(.bold)
                         .foregroundStyle(.primary)
-                    Text("PR")
+                    Text("自己ベスト")
                         .font(AppFont.caption2)
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
@@ -276,5 +305,46 @@ struct LibraryExerciseRow: View {
             .accessibilityLabel("\(template.name)の参考画像を検索")
         }
         .padding(.vertical, 4)
+    }
+}
+
+struct ExerciseHistoryDetailView: View {
+    let template: ExerciseTemplate
+    let workouts: [Workout]
+    @AppStorage("weightUnit") private var weightUnit = "kg"
+
+    private var records: [(Workout, WorkoutExercise)] {
+        workouts.compactMap { workout in
+            workout.workoutExercises.first(where: { exercise in
+                guard let candidate = exercise.exerciseTemplate else { return false }
+                return candidate.representsSameExercise(as: template)
+                    && exercise.sortedSets.contains(where: \.isCompleted)
+            }).map { (workout, $0) }
+        }.sorted { $0.0.date > $1.0.date }
+    }
+
+    var body: some View {
+        List {
+            Section("種目情報") {
+                LabeledContent("カテゴリ", value: template.category)
+                LabeledContent("対象部位", value: template.muscleGroup)
+            }
+            Section("履歴") {
+                if records.isEmpty {
+                    Text("まだ記録がありません").foregroundStyle(.secondary)
+                } else {
+                    ForEach(records, id: \.0.id) { workout, exercise in
+                        VStack(alignment: .leading, spacing: 4) {
+                            Text(workout.date.displayString).font(AppFont.subheadline).fontWeight(.semibold)
+                            Text(exercise.sortedSets.filter(\.isCompleted).map { "\($0.weight.setWeightDisplay(unit: weightUnit)) × \($0.reps)回" }.joined(separator: " / "))
+                                .font(AppFont.caption).foregroundStyle(.secondary)
+                        }
+                        .accessibilityElement(children: .combine)
+                    }
+                }
+            }
+        }
+        .navigationTitle(template.name)
+        .navigationBarTitleDisplayMode(.inline)
     }
 }

@@ -12,7 +12,10 @@ final class WorkoutViewModel {
     var homeNavigationDate: Date?
 
     /// 種目追加時に自動作成するセット数
-    private let defaultSetCount = 3
+    private var defaultSetCount: Int {
+        let stored = UserDefaults.standard.integer(forKey: "defaultSetCount")
+        return stored == 0 ? 3 : stored
+    }
 
     // MARK: - ワークアウト開始・終了
 
@@ -110,6 +113,7 @@ final class WorkoutViewModel {
 
     /// 種目をワークアウトに追加する（3セット分の枠を自動作成）
     func addExercise(_ template: ExerciseTemplate, to workout: Workout, context: ModelContext) {
+        guard !workout.workoutExercises.contains(where: { $0.exerciseTemplate?.id == template.id }) else { return }
         let order = workout.workoutExercises.count
         let workoutExercise = WorkoutExercise(order: order)
         workoutExercise.exerciseTemplate = template
@@ -123,14 +127,14 @@ final class WorkoutViewModel {
         }
     }
 
-    /// セットを追加する（前のセットの値を引き継ぐ）
+    /// セットを追加する（重量だけを引き継ぎ、回数は既定値へ戻す）
     func addSet(to workoutExercise: WorkoutExercise, context: ModelContext) {
         let lastSet = workoutExercise.sortedSets.last
         let order = workoutExercise.sets.count
         let newSet = ExerciseSet(
             order: order,
             weight: lastSet?.weight ?? 0,
-            reps: lastSet?.reps ?? 10
+            reps: 10
         )
         newSet.comment = lastSet?.comment ?? ""
         newSet.workoutExercise = workoutExercise
@@ -163,6 +167,20 @@ final class WorkoutViewModel {
         for (index, e) in workout.sortedExercises.enumerated() {
             e.order = index
         }
+    }
+
+    /// マシンの空き状況に合わせて種目の実施順を1つ上下へ移動する。
+    func moveExercise(_ exercise: WorkoutExercise, by offset: Int, in workout: Workout) {
+        var exercises = workout.sortedExercises
+        guard let sourceIndex = exercises.firstIndex(where: { $0.id == exercise.id }) else { return }
+        let destinationIndex = sourceIndex + offset
+        guard exercises.indices.contains(destinationIndex) else { return }
+
+        exercises.swapAt(sourceIndex, destinationIndex)
+        for (index, item) in exercises.enumerated() {
+            item.order = index
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // MARK: - コピー機能
@@ -205,7 +223,7 @@ final class WorkoutViewModel {
         var maxWeight = 0.0
         for workout in workouts where !workout.isActive {
             for exercise in workout.workoutExercises where exercise.exerciseTemplate?.id == template.id {
-                for set in exercise.sets where !set.isBodyweight {
+                for set in exercise.sets where set.isCompleted && !set.isBodyweight {
                     maxWeight = max(maxWeight, set.weight)
                 }
             }

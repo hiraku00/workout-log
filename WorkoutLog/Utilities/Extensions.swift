@@ -107,9 +107,6 @@ extension Double {
 
 // MARK: - Color拡張
 extension Color {
-    /// Appleスタイルのアクセントカラー（グレー基調）
-    static let accentColor = Color(red: 0.3, green: 0.3, blue: 0.3)
-
     /// カテゴリ名からカラーを取得
     static func categoryColor(_ category: String) -> Color {
         switch category {
@@ -127,11 +124,40 @@ extension Color {
 
 // MARK: - セット入力行レイアウト定数（列ズレ防止）
 enum SetRowLayout {
-    static let setNumber: CGFloat = 32
-    static let weight: CGFloat = 112
-    static let reps: CGFloat = 92
-    static let oneRM: CGFloat = 48
-    static let delete: CGFloat = 36
+    // 値そのものに必要な幅だけを確保する。余った横幅は列間で均等に配分し、
+    // 端末が広いほど重量フィールドだけが太ることを防ぐ。
+    static let setNumber: CGFloat = 24
+    static let weight: CGFloat = 78       // 999.9 kg
+    static let reps: CGFloat = 48         // 99 回
+    static let oneRM: CGFloat = 56        // 999.9
+    static let complete: CGFloat = 32
+    static let delete: CGFloat = 32
+    static let minimumGap: CGFloat = 8
+
+    static let totalColumnWidth = setNumber + weight + reps + oneRM + complete + delete
+
+    static func gap(for containerWidth: CGFloat) -> CGFloat {
+        max(minimumGap, (containerWidth - totalColumnWidth) / 5)
+    }
+
+    // 入力行だけはコピー操作と自重ボタンを重量・回数の列内に含める。
+    static let inputWeight: CGFloat = 124
+    static let inputReps: CGFloat = 68
+    static let inputColumnWidth = setNumber + inputWeight + inputReps + oneRM + complete
+
+    static func inputGap(for containerWidth: CGFloat) -> CGFloat {
+        max(minimumGap, (containerWidth - inputColumnWidth) / 4)
+    }
+}
+
+/// 入力画面と前回記録で共有する表の列幅。
+enum WorkoutRecordColumn {
+    static let set: CGFloat = SetRowLayout.setNumber
+    static let weight: CGFloat = SetRowLayout.weight
+    static let reps: CGFloat = SetRowLayout.reps
+    static let oneRM: CGFloat = SetRowLayout.oneRM
+    static let complete: CGFloat = SetRowLayout.complete
+    static let delete: CGFloat = SetRowLayout.delete
 }
 
 // MARK: - デザインシステム
@@ -141,11 +167,13 @@ enum AppDesign {
     static let spaceM: CGFloat = 12
     static let spaceL: CGFloat = 16
     static let spaceXL: CGFloat = 24
+    static let spaceXXL: CGFloat = 32
 
     static let cornerSmall: CGFloat = 8
     static let cornerMedium: CGFloat = 12
     static let cornerLarge: CGFloat = 16
     static let cornerHero: CGFloat = 20
+    static let cornerSheet: CGFloat = 28
 
     static var appBackground: Color {
         Color(.systemGroupedBackground)
@@ -156,7 +184,7 @@ enum AppDesign {
     }
 
     static var elevatedSurface: Color {
-        Color(.systemBackground)
+        Color(.secondarySystemGroupedBackground)
     }
 
     static var subtleFill: Color {
@@ -164,46 +192,62 @@ enum AppDesign {
     }
 
     static var hairline: Color {
-        Color.primary.opacity(0.08)
+        Color.primary.opacity(0.09)
     }
 
     static var accent: Color {
-        Color.primary
+        Color.accentColor
+    }
+
+    static var accentFill: Color {
+        Color.accentColor.opacity(0.14)
+    }
+
+    static var positive: Color {
+        Color(.systemGreen)
+    }
+
+    static var materialEdge: Color {
+        Color.white.opacity(0.22)
     }
 }
 
 enum AppFont {
-    static let fontName = "IPAexMincho"
-    static let largeTitle = Font.custom(fontName, size: 34, relativeTo: .largeTitle)
-    static let title = Font.custom(fontName, size: 28, relativeTo: .title)
-    static let title2 = Font.custom(fontName, size: 22, relativeTo: .title2)
-    static let title3 = Font.custom(fontName, size: 20, relativeTo: .title3)
-    static let headline = Font.custom(fontName, size: 17, relativeTo: .headline)
-    static let body = Font.custom(fontName, size: 17, relativeTo: .body)
-    static let input = Font.custom(fontName, size: 18, relativeTo: .body)
-    static let subheadline = Font.custom(fontName, size: 15, relativeTo: .subheadline)
-    static let caption = Font.custom(fontName, size: 12, relativeTo: .caption)
-    static let caption2 = Font.custom(fontName, size: 11, relativeTo: .caption2)
+    // Dynamic Typeと光学サイズ調整をOSに委ね、全画面でSan Franciscoを使う。
+    static let fontName = ".AppleSystemUIFont"
+    static let largeTitle = Font.system(.largeTitle, design: .default, weight: .bold)
+    static let title = Font.system(.title, design: .default, weight: .bold)
+    static let title2 = Font.system(.title2, design: .rounded, weight: .semibold)
+    static let title3 = Font.system(.title3, design: .default, weight: .semibold)
+    static let headline = Font.system(.headline, design: .default)
+    static let body = Font.system(.body, design: .default)
+    static let input = Font.system(.body, design: .rounded, weight: .semibold)
+    static let subheadline = Font.system(.subheadline, design: .default)
+    static let caption = Font.system(.caption, design: .default)
+    static let caption2 = Font.system(.caption2, design: .default)
 }
 
 struct AppCardModifier: ViewModifier {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var cornerRadius: CGFloat = AppDesign.cornerLarge
     var padding: CGFloat = 16
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(AppDesign.elevatedSurface)
+            .background(reduceTransparency ? AnyShapeStyle(AppDesign.elevatedSurface) : AnyShapeStyle(.thinMaterial))
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .stroke(AppDesign.hairline, lineWidth: 0.5)
+                    .strokeBorder(AppDesign.materialEdge, lineWidth: 0.7)
             )
-            .shadow(color: .black.opacity(0.05), radius: 18, x: 0, y: 8)
+            .shadow(color: .black.opacity(0.055), radius: 16, x: 0, y: 7)
     }
 }
 
 struct AppPrimaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppFont.headline).fontWeight(.semibold)
@@ -212,39 +256,98 @@ struct AppPrimaryButtonStyle: ButtonStyle {
             .frame(minHeight: 50)
             .background(AppDesign.accent)
             .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
-            .animation(.spring(response: 0.22, dampingFraction: 0.82), value: configuration.isPressed)
+            .brightness(configuration.isPressed ? -0.08 : 0)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1))
+            .animation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.24, dampingFraction: 1), value: configuration.isPressed)
+            .contentShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
     }
 }
 
 struct AppSecondaryButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppFont.subheadline).fontWeight(.semibold)
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 48)
-            .background(AppDesign.elevatedSurface)
+            .background(reduceTransparency ? AnyShapeStyle(AppDesign.elevatedSurface) : AnyShapeStyle(.thinMaterial))
             .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)
                     .stroke(AppDesign.hairline, lineWidth: 0.5)
             )
-            .scaleEffect(configuration.isPressed ? 0.985 : 1)
-            .animation(.spring(response: 0.22, dampingFraction: 0.82), value: configuration.isPressed)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1))
+            .opacity(configuration.isPressed ? 0.82 : 1)
+            .animation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.24, dampingFraction: 1), value: configuration.isPressed)
     }
 }
 
 struct AppIconButtonStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(width: 44, height: 44)
-            .background(AppDesign.subtleFill)
+            .background(configuration.isPressed ? AppDesign.accentFill : AppDesign.subtleFill)
             .clipShape(Circle())
-            .scaleEffect(configuration.isPressed ? 0.94 : 1)
-            .animation(.easeOut(duration: 0.16), value: configuration.isPressed)
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.9 : 1))
+            .animation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.22, dampingFraction: 1), value: configuration.isPressed)
+    }
+}
+
+/// リスト行やカード全体に、touch-downから分かる物理的な押下感を与える。
+struct AppPressableStyle: ButtonStyle {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
+    func makeBody(configuration: Configuration) -> some View {
+        configuration.label
+            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.985 : 1))
+            .opacity(configuration.isPressed ? 0.72 : 1)
+            .animation(reduceMotion ? .linear(duration: 0.08) : .spring(response: 0.2, dampingFraction: 1), value: configuration.isPressed)
+    }
+}
+
+struct AppSectionHeader: View {
+    let title: String
+    var actionTitle: String? = nil
+    var action: (() -> Void)? = nil
+
+    var body: some View {
+        HStack(alignment: .firstTextBaseline) {
+            Text(title)
+                .font(AppFont.title3)
+                .fontWeight(.semibold)
+                .tracking(-0.2)
+            Spacer()
+            if let actionTitle, let action {
+                Button(actionTitle, action: action)
+                    .font(AppFont.subheadline)
+                    .fontWeight(.semibold)
+            }
+        }
+        .frame(minHeight: 32)
+    }
+}
+
+/// 画面の最背面。大きな装飾を動かさず、淡い光だけで奥行きを作る。
+struct AppScreenBackground: View {
+    var body: some View {
+        ZStack {
+            AppDesign.appBackground
+            RadialGradient(
+                colors: [AppDesign.accent.opacity(0.11), .clear],
+                center: .topTrailing,
+                startRadius: 12,
+                endRadius: 360
+            )
+            .ignoresSafeArea()
+        }
+        .ignoresSafeArea()
     }
 }
 
