@@ -22,14 +22,14 @@ struct SetRowView: View {
     var body: some View {
         @Bindable var exerciseSet = exerciseSet
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: 8) {
+            HStack(spacing: SetRowLayout.spacing) {
                 Text("\(setNumber)")
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
-                    .frame(width: 44)
+                    .frame(width: SetRowLayout.setNumber)
 
                 weightInput(exerciseSet: exerciseSet)
-                .frame(maxWidth: .infinity)
+                    .frame(width: SetRowLayout.weight)
 
                 pickerButton(
                     value: "\(exerciseSet.reps)",
@@ -38,14 +38,16 @@ struct SetRowView: View {
                 ) {
                     showingRepsPicker = true
                 }
-                .frame(maxWidth: .infinity)
+                .frame(width: SetRowLayout.reps)
 
                 Text(oneRM > 0 ? oneRM.weightString(unit: "") : "—")
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
                     .monospacedDigit()
                     .contentTransition(.numericText())
-                    .frame(width: 58)
+                    .minimumScaleFactor(0.7)
+                    .lineLimit(1)
+                    .frame(width: SetRowLayout.oneRM)
 
                 Button {
                     exerciseSet.isCompleted.toggle()
@@ -55,7 +57,7 @@ struct SetRowView: View {
                         .font(.system(size: 21))
                         .foregroundStyle(exerciseSet.isCompleted ? AppDesign.accent : Color.secondary)
                 }
-                .frame(width: 44, height: 44)
+                .frame(width: SetRowLayout.delete, height: 44)
                 .accessibilityLabel(exerciseSet.isCompleted ? "セット完了を取り消す" : "セットを完了")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
@@ -88,7 +90,7 @@ struct SetRowView: View {
                     .stroke(AppDesign.hairline, lineWidth: 0.8)
             )
         }
-        .padding(.horizontal, 8)
+        .padding(.horizontal, 4)
         .padding(.vertical, 4)
         .background(exerciseSet.isCompleted ? AppDesign.accentFill : Color.clear)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
@@ -119,7 +121,7 @@ struct SetRowView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(AppFont.caption)
                         .foregroundStyle(AppDesign.accent)
-                        .frame(width: 32, height: 44)
+                        .frame(width: 24, height: 44)
                 }
                 .buttonStyle(.plain)
                 .accessibilityLabel("前のセットの重量をコピー")
@@ -136,21 +138,12 @@ struct SetRowView: View {
                 .buttonStyle(.plain)
                 .accessibilityHint("タップすると重量入力へ戻ります")
             } else {
-                TextField(
-                    "0",
-                    value: displayWeightBinding(for: exerciseSet),
-                    format: .number.precision(.fractionLength(0...2))
-                )
-                .font(AppFont.input)
-                .monospacedDigit()
-                .keyboardType(.decimalPad)
-                .multilineTextAlignment(.trailing)
-                .frame(maxWidth: .infinity, minHeight: 44)
+                WeightTextField(exerciseSet: exerciseSet, weightUnit: weightUnit)
 
                 Text(weightUnit)
                     .font(AppFont.caption2)
                     .foregroundStyle(.secondary)
-                    .padding(.horizontal, 5)
+                    .padding(.horizontal, 2)
             }
 
             Menu {
@@ -167,7 +160,7 @@ struct SetRowView: View {
                 Image(systemName: "ellipsis")
                     .font(AppFont.caption)
                     .foregroundStyle(.secondary)
-                    .frame(width: 28, height: 44)
+                    .frame(width: 22, height: 44)
             }
             .accessibilityLabel("重量入力のオプション")
         }
@@ -176,18 +169,6 @@ struct SetRowView: View {
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
                 .stroke(AppDesign.hairline, lineWidth: 0.8)
-        )
-    }
-
-    private func displayWeightBinding(for exerciseSet: ExerciseSet) -> Binding<Double> {
-        Binding(
-            get: {
-                weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
-            },
-            set: { displayValue in
-                let sanitized = max(0, displayValue)
-                exerciseSet.weight = weightUnit == "lbs" ? sanitized / 2.20462 : sanitized
-            }
         )
     }
 
@@ -203,7 +184,7 @@ struct SetRowView: View {
                     Image(systemName: "arrow.up.circle.fill")
                         .font(AppFont.caption)
                         .foregroundStyle(.primary)
-                        .frame(width: 34, height: 44)
+                        .frame(width: 24, height: 44)
                 }
                 .buttonStyle(.plain)
                 .contentShape(Rectangle())
@@ -270,21 +251,81 @@ struct SetRowView: View {
 /// セット入力行のカラムヘッダー
 struct SetRowColumnHeader: View {
     var body: some View {
-        HStack(spacing: 8) {
+        HStack(spacing: SetRowLayout.spacing) {
             Text("セット")
-                .frame(width: 44)
+                .frame(width: SetRowLayout.setNumber)
             Text("重量")
-                .frame(maxWidth: .infinity)
+                .frame(width: SetRowLayout.weight)
             Text("回数")
-                .frame(maxWidth: .infinity)
+                .frame(width: SetRowLayout.reps)
             Text("1RM")
-                .frame(width: 58)
-            Text("完了").frame(width: 44)
+                .frame(width: SetRowLayout.oneRM)
+            Text("完了").frame(width: SetRowLayout.delete)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(AppFont.caption)
         .fontWeight(.semibold)
         .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
         .padding(.vertical, 6)
+    }
+}
+
+/// Formatter付きの数値Bindingでは入力途中の「.」が消えるため、文字列を保持して小数入力を確実に扱う。
+private struct WeightTextField: View {
+    let exerciseSet: ExerciseSet
+    let weightUnit: String
+
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
+
+    var body: some View {
+        TextField("0", text: $text)
+            .font(AppFont.input)
+            .monospacedDigit()
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .focused($isFocused)
+            .frame(maxWidth: .infinity, minHeight: 44)
+            .onAppear { refreshText() }
+            .onChange(of: text) { _, newValue in
+                updateWeight(from: newValue)
+            }
+            .onChange(of: exerciseSet.weight) { _, _ in
+                if !isFocused { refreshText() }
+            }
+            .onChange(of: weightUnit) { _, _ in
+                refreshText()
+            }
+            .accessibilityLabel("重量")
+    }
+
+    private func updateWeight(from input: String) {
+        let normalized = input
+            .replacingOccurrences(of: ",", with: ".")
+            .replacingOccurrences(of: "．", with: ".")
+        guard normalized.filter({ $0 == "." }).count <= 1,
+              let value = Double(normalized),
+              value >= 0 else { return }
+        exerciseSet.weight = weightUnit == "lbs" ? value / 2.20462 : value
+    }
+
+    private func refreshText() {
+        guard !exerciseSet.isBodyweight else {
+            text = ""
+            return
+        }
+        let value = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+        text = formatted(value)
+    }
+
+    private func formatted(_ value: Double) -> String {
+        let result = String(format: "%.2f", value)
+        return result
+            .replacingOccurrences(of: #"\.0+$"#, with: "", options: .regularExpression)
+            .replacingOccurrences(of: #"(\.[0-9]*?)0+$"#, with: "$1", options: .regularExpression)
     }
 }

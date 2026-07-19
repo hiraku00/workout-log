@@ -125,10 +125,11 @@ extension Color {
 // MARK: - セット入力行レイアウト定数（列ズレ防止）
 enum SetRowLayout {
     static let setNumber: CGFloat = 32
-    static let weight: CGFloat = 112
-    static let reps: CGFloat = 92
-    static let oneRM: CGFloat = 48
-    static let delete: CGFloat = 36
+    static let weight: CGFloat = 120
+    static let reps: CGFloat = 76
+    static let oneRM: CGFloat = 46
+    static let delete: CGFloat = 34
+    static let spacing: CGFloat = 6
 }
 
 // MARK: - デザインシステム

@@ -348,20 +348,8 @@ struct DayWorkoutContent: View {
                 if workout.sortedExercises.isEmpty {
                     emptyExercisePlaceholder
                 } else {
-                    ForEach(workout.sortedExercises) { exercise in
-                        NavigationLink {
-                            ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
-                        } label: {
-                            ExerciseRowView(workoutExercise: exercise)
-                        }
-                        .buttonStyle(.plain)
-                        .contextMenu {
-                            Button("削除", role: .destructive) {
-                                withAnimation {
-                                    viewModel.removeExercise(exercise, from: workout, context: modelContext)
-                                }
-                            }
-                        }
+                    ForEach(Array(workout.sortedExercises.enumerated()), id: \.element.id) { index, exercise in
+                        exerciseListCard(exercise, at: index, in: workout)
                     }
                 }
 
@@ -411,6 +399,72 @@ struct DayWorkoutContent: View {
     private func ensureWorkout() {
         if workout == nil {
             workout = viewModel.workout(for: targetDate, in: modelContext)
+        }
+    }
+
+    private func exerciseListCard(_ exercise: WorkoutExercise, at index: Int, in workout: Workout) -> some View {
+        HStack(spacing: 0) {
+            NavigationLink {
+                ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
+            } label: {
+                ExerciseRowView(workoutExercise: exercise, embedded: true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .buttonStyle(.plain)
+            .frame(maxWidth: .infinity)
+
+            Divider()
+                .padding(.vertical, 12)
+
+            VStack(spacing: 0) {
+                Button {
+                    withAnimation(.snappy) {
+                        viewModel.moveExercise(exercise, by: -1, in: workout)
+                    }
+                } label: {
+                    Image(systemName: "chevron.up")
+                        .frame(width: 44, height: 40)
+                }
+                .disabled(index == 0)
+                .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を上へ移動")
+
+                Divider().padding(.horizontal, 8)
+
+                Button {
+                    withAnimation(.snappy) {
+                        viewModel.moveExercise(exercise, by: 1, in: workout)
+                    }
+                } label: {
+                    Image(systemName: "chevron.down")
+                        .frame(width: 44, height: 40)
+                }
+                .disabled(index == workout.sortedExercises.count - 1)
+                .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を下へ移動")
+            }
+            .frame(width: 44)
+            .font(AppFont.subheadline)
+            .fontWeight(.semibold)
+        }
+        .background(AppDesign.elevatedSurface)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous)
+                .stroke(AppDesign.hairline, lineWidth: 0.5)
+        )
+        .contextMenu {
+            Button("上へ移動", systemImage: "chevron.up") {
+                viewModel.moveExercise(exercise, by: -1, in: workout)
+            }
+            .disabled(index == 0)
+            Button("下へ移動", systemImage: "chevron.down") {
+                viewModel.moveExercise(exercise, by: 1, in: workout)
+            }
+            .disabled(index == workout.sortedExercises.count - 1)
+            Button("削除", role: .destructive) {
+                withAnimation {
+                    viewModel.removeExercise(exercise, from: workout, context: modelContext)
+                }
+            }
         }
     }
 

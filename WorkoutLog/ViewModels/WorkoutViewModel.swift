@@ -169,6 +169,20 @@ final class WorkoutViewModel {
         }
     }
 
+    /// マシンの空き状況に合わせて種目の実施順を1つ上下へ移動する。
+    func moveExercise(_ exercise: WorkoutExercise, by offset: Int, in workout: Workout) {
+        var exercises = workout.sortedExercises
+        guard let sourceIndex = exercises.firstIndex(where: { $0.id == exercise.id }) else { return }
+        let destinationIndex = sourceIndex + offset
+        guard exercises.indices.contains(destinationIndex) else { return }
+
+        exercises.swapAt(sourceIndex, destinationIndex)
+        for (index, item) in exercises.enumerated() {
+            item.order = index
+        }
+        UIImpactFeedbackGenerator(style: .light).impactOccurred()
+    }
+
     // MARK: - コピー機能
 
     /// 過去のワークアウトを今日にコピーする（同日の記録があれば種目を追加）

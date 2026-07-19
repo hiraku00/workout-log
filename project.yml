@@ -63,3 +63,4 @@ targets:
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.hiraku.WorkoutLogTests
+        GENERATE_INFOPLIST_FILE: YES

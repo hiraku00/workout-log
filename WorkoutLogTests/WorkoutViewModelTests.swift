@@ -41,4 +41,24 @@ final class WorkoutViewModelTests: XCTestCase {
 
         XCTAssertFalse(first.representsSameExercise(as: second))
     }
+
+    func testExerciseOrderCanMoveUpAndDown() {
+        let workout = Workout()
+        let first = WorkoutExercise(order: 0)
+        let second = WorkoutExercise(order: 1)
+        let third = WorkoutExercise(order: 2)
+        first.workout = workout
+        second.workout = workout
+        third.workout = workout
+        workout.workoutExercises = [first, second, third]
+
+        let viewModel = WorkoutViewModel()
+        viewModel.moveExercise(third, by: -1, in: workout)
+
+        XCTAssertEqual(workout.sortedExercises.map(\.id), [first.id, third.id, second.id])
+
+        viewModel.moveExercise(first, by: 1, in: workout)
+
+        XCTAssertEqual(workout.sortedExercises.map(\.id), [third.id, first.id, second.id])
+    }
 }
