@@ -403,7 +403,7 @@ struct DayWorkoutContent: View {
     }
 
     private func exerciseListCard(_ exercise: WorkoutExercise, at index: Int, in workout: Workout) -> some View {
-        HStack(spacing: 0) {
+        ZStack(alignment: .topTrailing) {
             NavigationLink {
                 ExerciseDetailView(workoutExercise: exercise, allWorkouts: allWorkouts)
             } label: {
@@ -413,22 +413,17 @@ struct DayWorkoutContent: View {
             .buttonStyle(.plain)
             .frame(maxWidth: .infinity)
 
-            Divider()
-                .padding(.vertical, 12)
-
-            VStack(spacing: 0) {
+            HStack(spacing: 2) {
                 Button {
                     withAnimation(.snappy) {
                         viewModel.moveExercise(exercise, by: -1, in: workout)
                     }
                 } label: {
                     Image(systemName: "chevron.up")
-                        .frame(width: 44, height: 40)
+                        .frame(width: 34, height: 34)
                 }
                 .disabled(index == 0)
                 .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を上へ移動")
-
-                Divider().padding(.horizontal, 8)
 
                 Button {
                     withAnimation(.snappy) {
@@ -436,14 +431,15 @@ struct DayWorkoutContent: View {
                     }
                 } label: {
                     Image(systemName: "chevron.down")
-                        .frame(width: 44, height: 40)
+                        .frame(width: 34, height: 34)
                 }
                 .disabled(index == workout.sortedExercises.count - 1)
                 .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を下へ移動")
             }
-            .frame(width: 44)
             .font(AppFont.subheadline)
             .fontWeight(.semibold)
+            .padding(.top, 16)
+            .padding(.trailing, 10)
         }
         .background(AppDesign.elevatedSurface)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous))
@@ -469,10 +465,10 @@ struct DayWorkoutContent: View {
     }
 
     private func headerSummarySection(for workout: Workout) -> some View {
-        AppMetricGroup(items: [
-            AppMetricItem(value: "\(workout.workoutExercises.count)", label: "種目"),
+        return AppMetricGroup(items: [
+            AppMetricItem(value: "\(workout.completedExerciseCount)", label: "種目"),
             AppMetricItem(value: "\(workout.totalSets)", label: "セット"),
-            AppMetricItem(value: "\(totalReps(for: workout))", label: "回数"),
+            AppMetricItem(value: "\(workout.totalReps)", label: "回数"),
             AppMetricItem(value: formattedVolume(for: workout), label: "ボリューム")
         ])
     }
@@ -533,10 +529,6 @@ struct DayWorkoutContent: View {
         } message: {
             Text("種目・重量・回数を引き継ぎます。")
         }
-    }
-
-    private func totalReps(for workout: Workout) -> Int {
-        workout.workoutExercises.flatMap { $0.sets }.reduce(0) { $0 + $1.reps }
     }
 
     private func formattedVolume(for workout: Workout) -> String {

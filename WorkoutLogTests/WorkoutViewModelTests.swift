@@ -61,4 +61,23 @@ final class WorkoutViewModelTests: XCTestCase {
 
         XCTAssertEqual(workout.sortedExercises.map(\.id), [third.id, first.id, second.id])
     }
+
+    func testWorkoutTotalsOnlyIncludeCompletedSets() {
+        let workout = Workout()
+        let exercise = WorkoutExercise()
+        exercise.workout = workout
+        workout.workoutExercises = [exercise]
+
+        let completed = ExerciseSet(order: 0, weight: 80, reps: 8)
+        completed.isCompleted = true
+        let planned = ExerciseSet(order: 1, weight: 100, reps: 10)
+        completed.workoutExercise = exercise
+        planned.workoutExercise = exercise
+        exercise.sets = [completed, planned]
+
+        XCTAssertEqual(workout.totalSets, 1)
+        XCTAssertEqual(workout.totalReps, 8)
+        XCTAssertEqual(workout.totalVolume, 640)
+        XCTAssertEqual(workout.completedExerciseCount, 1)
+    }
 }

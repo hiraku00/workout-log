@@ -22,18 +22,29 @@ final class Workout {
         workoutExercises.sorted { $0.order < $1.order }
     }
 
-    /// 全セットを合算した総ボリューム（重量kg × レップ数。自重は除外）
-    var totalVolume: Double {
-        workoutExercises.reduce(0) { total, exercise in
-            total + exercise.sets.reduce(0) { setTotal, set in
-                setTotal + set.volumeContribution
-            }
-        }
+    /// 実際に完了チェックされたセット。
+    var completedSets: [ExerciseSet] {
+        workoutExercises.flatMap(\.sets).filter(\.isCompleted)
     }
 
-    /// 全種目合計のセット数
+    /// 1セット以上完了した種目数。
+    var completedExerciseCount: Int {
+        workoutExercises.filter { $0.sets.contains(where: \.isCompleted) }.count
+    }
+
+    /// 完了セットを合算した総ボリューム（重量kg × レップ数。自重は除外）
+    var totalVolume: Double {
+        completedSets.reduce(0) { $0 + $1.volumeContribution }
+    }
+
+    /// 実施完了したセット数
     var totalSets: Int {
-        workoutExercises.reduce(0) { $0 + $1.sets.count }
+        completedSets.count
+    }
+
+    /// 実施完了した合計回数。
+    var totalReps: Int {
+        completedSets.reduce(0) { $0 + $1.reps }
     }
 
     init(date: Date = .now, name: String = "") {

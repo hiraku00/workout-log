@@ -63,9 +63,9 @@ struct DayDetailView: View {
     // MARK: - ヘッダーバー（統計カード）
     private var headerBar: some View {
         let workout = workoutForCurrentDate
-        let exercises = workout?.workoutExercises.count ?? 0
+        let exercises = workout?.completedExerciseCount ?? 0
         let sets = workout?.totalSets ?? 0
-        let reps = workout?.workoutExercises.flatMap { $0.sets }.reduce(0) { $0 + $1.reps } ?? 0
+        let reps = workout?.totalReps ?? 0
         let volume = workout?.totalVolume ?? 0.0
 
         return AppMetricGroup(items: [
