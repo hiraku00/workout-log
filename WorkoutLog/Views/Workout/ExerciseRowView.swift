@@ -62,22 +62,25 @@ struct ExerciseRowView: View {
 
                     ForEach(Array(workoutExercise.sortedSets.enumerated()), id: \.element.id) { index, set in
                         Divider()
-                        HStack(spacing: WorkoutRecordColumn.spacing) {
+                        HStack(spacing: 0) {
                             Text("\(index + 1)")
                                 .font(AppFont.caption)
                                 .foregroundStyle(.secondary)
                                 .frame(width: WorkoutRecordColumn.set, alignment: .leading)
+                            Spacer(minLength: SetRowLayout.minimumGap)
                             Text(set.weight.setWeightDisplay(unit: weightUnit))
                                 .font(AppFont.subheadline)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
                                 .foregroundStyle(set.isCompleted ? Color.primary : Color.secondary)
                                 .frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
                             Text("\(set.reps)回")
                                 .font(AppFont.subheadline)
                                 .monospacedDigit()
                                 .foregroundStyle(set.isCompleted ? Color.primary : Color.secondary)
                                 .frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
 
                             let oneRM = set.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
                             Text(oneRM > 0 ? oneRM.weightString() : "—")
@@ -85,11 +88,13 @@ struct ExerciseRowView: View {
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
 
                             Image(systemName: set.isCompleted ? "checkmark.circle.fill" : "circle")
                                 .font(AppFont.caption)
                                 .foregroundStyle(set.isCompleted ? AppDesign.positive : Color.secondary)
                                 .frame(width: WorkoutRecordColumn.complete)
+                            Spacer(minLength: SetRowLayout.minimumGap)
 
                             if let onDeleteSet {
                                 Button(role: .destructive) {
@@ -127,13 +132,18 @@ struct ExerciseRowView: View {
     }
 
     private var recordColumnHeader: some View {
-        HStack(spacing: WorkoutRecordColumn.spacing) {
+        HStack(spacing: 0) {
             Text("セット").frame(width: WorkoutRecordColumn.set, alignment: .leading)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("重量").frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("回数").frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("1RM").frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("完了").frame(width: WorkoutRecordColumn.complete)
-            Text("削除").frame(width: WorkoutRecordColumn.delete)
+            Spacer(minLength: SetRowLayout.minimumGap)
+            Color.clear.frame(width: WorkoutRecordColumn.delete)
         }
         .font(AppFont.caption2)
         .fontWeight(.semibold)

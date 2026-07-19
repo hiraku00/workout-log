@@ -18,14 +18,18 @@ struct SetRowView: View {
     var body: some View {
         @Bindable var exerciseSet = exerciseSet
         VStack(alignment: .leading, spacing: 6) {
-            HStack(spacing: SetRowLayout.spacing) {
+            HStack(spacing: 0) {
                 Text("\(setNumber)")
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
                     .frame(width: SetRowLayout.setNumber)
 
+                Spacer(minLength: SetRowLayout.minimumGap)
+
                 weightInput(exerciseSet: exerciseSet)
                     .frame(width: SetRowLayout.weight)
+
+                Spacer(minLength: SetRowLayout.minimumGap)
 
                 pickerButton(
                     value: "\(exerciseSet.reps)",
@@ -35,6 +39,8 @@ struct SetRowView: View {
                 }
                 .frame(width: SetRowLayout.reps)
 
+                Spacer(minLength: SetRowLayout.minimumGap)
+
                 Text(oneRM > 0 ? oneRM.weightString(unit: "") : "—")
                     .font(AppFont.input)
                     .foregroundStyle(.secondary)
@@ -43,6 +49,8 @@ struct SetRowView: View {
                     .minimumScaleFactor(0.7)
                     .lineLimit(1)
                     .frame(width: SetRowLayout.oneRM)
+
+                Spacer(minLength: SetRowLayout.minimumGap)
 
                 Button {
                     exerciseSet.isCompleted.toggle()
@@ -54,6 +62,8 @@ struct SetRowView: View {
                 }
                 .frame(width: SetRowLayout.complete, height: 40)
                 .accessibilityLabel(exerciseSet.isCompleted ? "セット完了を取り消す" : "セットを完了")
+
+                Spacer(minLength: SetRowLayout.minimumGap)
 
                 Button(role: .destructive, action: onDelete) {
                     Image(systemName: "trash")
@@ -214,17 +224,22 @@ struct SetRowView: View {
 /// セット入力行のカラムヘッダー
 struct SetRowColumnHeader: View {
     var body: some View {
-        HStack(spacing: SetRowLayout.spacing) {
+        HStack(spacing: 0) {
             Text("セット")
                 .frame(width: SetRowLayout.setNumber)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("重量")
                 .frame(width: SetRowLayout.weight)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("回数")
                 .frame(width: SetRowLayout.reps)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("1RM")
                 .frame(width: SetRowLayout.oneRM)
+            Spacer(minLength: SetRowLayout.minimumGap)
             Text("完了").frame(width: SetRowLayout.complete)
-            Text("削除").frame(width: SetRowLayout.delete)
+            Spacer(minLength: SetRowLayout.minimumGap)
+            Color.clear.frame(width: SetRowLayout.delete)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(AppFont.caption)

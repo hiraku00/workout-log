@@ -162,21 +162,24 @@ struct ExerciseDetailView: View {
                 VStack(spacing: 0) {
                     ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
                         Divider()
-                        HStack(spacing: WorkoutRecordColumn.spacing) {
+                        HStack(spacing: 0) {
                             Text("\(index + 1)")
                                 .font(AppFont.caption2)
                                 .foregroundStyle(.secondary)
                                 .frame(width: WorkoutRecordColumn.set, alignment: .leading)
+                            Spacer(minLength: SetRowLayout.minimumGap)
                             Text(set.weight.setWeightDisplay(unit: weightUnit))
                                 .font(AppFont.caption)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
                             Text("\(set.reps)回")
                                 .font(AppFont.caption)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
 
                             let estimatedOneRM = set.weight == ExerciseSet.bodyweightValue
                                 ? 0
@@ -186,6 +189,10 @@ struct ExerciseDetailView: View {
                                 .foregroundStyle(.secondary)
                                 .monospacedDigit()
                                 .frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+                            Color.clear.frame(width: WorkoutRecordColumn.complete)
+                            Spacer(minLength: SetRowLayout.minimumGap)
+                            Color.clear.frame(width: WorkoutRecordColumn.delete)
                         }
                         .frame(minHeight: 32)
                     }
