@@ -133,6 +133,12 @@ enum SetRowLayout {
     static let complete: CGFloat = 32
     static let delete: CGFloat = 32
     static let minimumGap: CGFloat = 8
+
+    static let totalColumnWidth = setNumber + weight + reps + oneRM + complete + delete
+
+    static func gap(for containerWidth: CGFloat) -> CGFloat {
+        max(minimumGap, (containerWidth - totalColumnWidth) / 5)
+    }
 }
 
 /// 入力画面と前回記録で共有する表の列幅。
