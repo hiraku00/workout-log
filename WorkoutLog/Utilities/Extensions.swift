@@ -139,6 +139,15 @@ enum SetRowLayout {
     static func gap(for containerWidth: CGFloat) -> CGFloat {
         max(minimumGap, (containerWidth - totalColumnWidth) / 5)
     }
+
+    // 入力行だけはコピー操作と自重ボタンを重量・回数の列内に含める。
+    static let inputWeight: CGFloat = 124
+    static let inputReps: CGFloat = 68
+    static let inputColumnWidth = setNumber + inputWeight + inputReps + oneRM + complete
+
+    static func inputGap(for containerWidth: CGFloat) -> CGFloat {
+        max(minimumGap, (containerWidth - inputColumnWidth) / 4)
+    }
 }
 
 /// 入力画面と前回記録で共有する表の列幅。

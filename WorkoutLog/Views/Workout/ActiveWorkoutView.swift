@@ -32,6 +32,11 @@ struct ExerciseDetailView: View {
 
                 ForEach(workoutExercise.sortedSets) { set in
                     let setIndex = workoutExercise.sortedSets.firstIndex(where: { $0.id == set.id }) ?? 0
+                    let previousSetInWorkout = setIndex > 0 ? workoutExercise.sortedSets[setIndex - 1] : nil
+                    let previousWorkoutSet = previousWorkoutSet(at: setIndex)
+                    let noteSource = [previousSetInWorkout, previousWorkoutSet]
+                        .compactMap { $0 }
+                        .first { !$0.comment.isEmpty }
 
                     SetRowView(
                         exerciseSet: set,
@@ -41,6 +46,15 @@ struct ExerciseDetailView: View {
                                 viewModel.removeSet(set, from: workoutExercise, context: modelContext)
                             }
                             UIImpactFeedbackGenerator(style: .light).impactOccurred()
+                        },
+                        onCopyWeight: previousSetInWorkout.map { previousSet in
+                            { set.weight = previousSet.weight; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        },
+                        onCopyReps: previousSetInWorkout.map { previousSet in
+                            { set.reps = previousSet.reps; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
+                        },
+                        onCopyNote: noteSource.map { source in
+                            { set.comment = source.comment; UIImpactFeedbackGenerator(style: .light).impactOccurred() }
                         },
                         onCompleted: startTimer
                     )
@@ -217,6 +231,11 @@ struct ExerciseDetailView: View {
             .filter(\.isCompleted)
             .map { (weight: $0.weight, reps: $0.reps) }
         return (date: record.workout.date, sets: sets)
+    }
+
+    private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
+        let previousSets = previousWorkoutRecord?.exercise.sortedSets.filter(\.isCompleted) ?? []
+        return index < previousSets.count ? previousSets[index] : previousSets.last
     }
 
     private var previousWorkoutRecord: (workout: Workout, exercise: WorkoutExercise)? {
