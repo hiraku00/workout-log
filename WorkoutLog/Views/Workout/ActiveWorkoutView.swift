@@ -170,40 +170,42 @@ struct ExerciseDetailView: View {
 
             if let info {
                 VStack(spacing: 0) {
-                    ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
-                        if index > 0 { Divider() }
+                    previousRecordColumnHeader
 
-                        HStack(spacing: 10) {
+                    ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
+                        Divider()
+                        HStack(spacing: WorkoutRecordColumn.spacing) {
                             Text("\(index + 1)")
                                 .font(AppFont.caption)
                                 .foregroundStyle(.secondary)
-                                .frame(width: 24, alignment: .leading)
+                                .frame(width: WorkoutRecordColumn.set, alignment: .leading)
                             Text(set.weight.setWeightDisplay(unit: weightUnit))
                                 .font(AppFont.subheadline)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
-                            Text("×")
-                                .font(AppFont.caption)
-                                .foregroundStyle(.secondary)
+                                .frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
                             Text("\(set.reps)回")
                                 .font(AppFont.subheadline)
                                 .fontWeight(.semibold)
                                 .monospacedDigit()
-                            Spacer()
+                                .frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
 
                             let estimatedOneRM = set.weight == ExerciseSet.bodyweightValue
                                 ? 0
                                 : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
-                            if estimatedOneRM > 0 {
-                                Text("1RM \(estimatedOneRM.setWeightDisplay(unit: weightUnit))")
-                                    .font(AppFont.caption)
-                                    .foregroundStyle(.secondary)
-                                    .monospacedDigit()
-                            }
+                            Text(estimatedOneRM > 0 ? estimatedOneRM.setWeightDisplay(unit: weightUnit) : "—")
+                                .font(AppFont.caption)
+                                .foregroundStyle(.secondary)
+                                .monospacedDigit()
+                                .frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
+                            Spacer().frame(width: WorkoutRecordColumn.status)
                         }
                         .padding(.vertical, 7)
                     }
                 }
+                .padding(.horizontal, 4)
+                .background(AppDesign.subtleFill)
+                .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
             } else {
                 Text("この種目の過去記録はありません")
                     .font(AppFont.caption)
@@ -213,6 +215,22 @@ struct ExerciseDetailView: View {
         }
         .appCard(cornerRadius: AppDesign.cornerMedium, padding: 12)
         .padding(.horizontal, 12)
+    }
+
+    private var previousRecordColumnHeader: some View {
+        HStack(spacing: WorkoutRecordColumn.spacing) {
+            Text("セット").frame(width: WorkoutRecordColumn.set, alignment: .leading)
+            Text("重量").frame(width: WorkoutRecordColumn.weight, alignment: .trailing)
+            Text("回数").frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
+            Text("1RM").frame(width: WorkoutRecordColumn.oneRM, alignment: .trailing)
+            Text("").frame(width: WorkoutRecordColumn.status)
+        }
+        .font(AppFont.caption2)
+        .fontWeight(.semibold)
+        .foregroundStyle(.secondary)
+        .lineLimit(1)
+        .minimumScaleFactor(0.7)
+        .padding(.vertical, 6)
     }
 
     private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {

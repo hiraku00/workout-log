@@ -24,6 +24,7 @@ struct WorkoutLogApp: App {
         WindowGroup {
             AppRootView()
                 .modelContainer(modelContainer)
+                .preferredColorScheme(.light)
         }
     }
 }

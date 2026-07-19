@@ -132,6 +132,16 @@ enum SetRowLayout {
     static let spacing: CGFloat = 6
 }
 
+/// 入力画面と前回記録で共有する表の列幅。
+enum WorkoutRecordColumn {
+    static let set: CGFloat = SetRowLayout.setNumber
+    static let weight: CGFloat = SetRowLayout.weight
+    static let reps: CGFloat = SetRowLayout.reps
+    static let oneRM: CGFloat = SetRowLayout.oneRM
+    static let status: CGFloat = SetRowLayout.delete
+    static let spacing: CGFloat = SetRowLayout.spacing
+}
+
 // MARK: - デザインシステム
 enum AppDesign {
     static let spaceXS: CGFloat = 4
