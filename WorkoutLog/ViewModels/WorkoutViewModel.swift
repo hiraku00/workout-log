@@ -223,7 +223,7 @@ final class WorkoutViewModel {
         var maxWeight = 0.0
         for workout in workouts where !workout.isActive {
             for exercise in workout.workoutExercises where exercise.exerciseTemplate?.id == template.id {
-                for set in exercise.sets where !set.isBodyweight {
+                for set in exercise.sets where set.isCompleted && !set.isBodyweight {
                     maxWeight = max(maxWeight, set.weight)
                 }
             }

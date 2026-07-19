@@ -99,6 +99,7 @@ struct SetRowView: View {
         .swipeActions(edge: .trailing) {
             Button("削除", role: .destructive, action: onDelete)
         }
+        .accessibilityHint("左へスワイプするとセットを削除できます")
         .sheet(isPresented: $showingRepsPicker) {
             wheelPickerSheet(
                 title: "レップ数",

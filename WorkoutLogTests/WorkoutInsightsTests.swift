@@ -128,6 +128,7 @@ final class WorkoutInsightsTests: XCTestCase {
 
         for (index, values) in sets.enumerated() {
             let set = ExerciseSet(order: index, weight: values.0, reps: values.1)
+            set.isCompleted = true
             set.workoutExercise = exercise
             exercise.sets.append(set)
         }

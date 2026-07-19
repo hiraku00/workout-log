@@ -118,14 +118,14 @@ enum WorkoutInsights {
 
     private static func bestEstimatedOneRM(in exercise: WorkoutExercise) -> Double? {
         exercise.sets
-            .filter { !$0.isBodyweight && $0.weight > 0 && $0.reps > 0 }
+            .filter { $0.isCompleted && !$0.isBodyweight && $0.weight > 0 && $0.reps > 0 }
             .map { WorkoutViewModel.estimateOneRM(weight: $0.weight, reps: $0.reps) }
             .max()
     }
 
     private static func bestBodyweightReps(in exercise: WorkoutExercise) -> Int? {
         exercise.sets
-            .filter { $0.isBodyweight && $0.reps > 0 }
+            .filter { $0.isCompleted && $0.isBodyweight && $0.reps > 0 }
             .map(\.reps)
             .max()
     }

@@ -208,7 +208,7 @@ struct ExerciseLibraryView: View {
         completedWorkouts
             .flatMap { $0.workoutExercises }
             .filter { $0.exerciseTemplate?.id == template.id }
-            .flatMap { $0.sets }
+            .flatMap { $0.sets.filter(\.isCompleted) }
             .map { $0.weight }
             .max() ?? 0
     }
@@ -217,7 +217,7 @@ struct ExerciseLibraryView: View {
         completedWorkouts
             .flatMap { $0.workoutExercises }
             .filter { $0.exerciseTemplate?.id == template.id }
-            .flatMap { $0.sets }
+            .flatMap { $0.sets.filter(\.isCompleted) }
             .filter(\.isBodyweight)
             .map(\.reps)
             .max() ?? 0
@@ -318,6 +318,7 @@ struct ExerciseHistoryDetailView: View {
             workout.workoutExercises.first(where: { exercise in
                 guard let candidate = exercise.exerciseTemplate else { return false }
                 return candidate.representsSameExercise(as: template)
+                    && exercise.sortedSets.contains(where: \.isCompleted)
             }).map { (workout, $0) }
         }.sorted { $0.0.date > $1.0.date }
     }
@@ -335,7 +336,7 @@ struct ExerciseHistoryDetailView: View {
                     ForEach(records, id: \.0.id) { workout, exercise in
                         VStack(alignment: .leading, spacing: 4) {
                             Text(workout.date.displayString).font(AppFont.subheadline).fontWeight(.semibold)
-                            Text(exercise.sortedSets.map { "\($0.weight.setWeightDisplay(unit: weightUnit)) × \($0.reps)回" }.joined(separator: " / "))
+                            Text(exercise.sortedSets.filter(\.isCompleted).map { "\($0.weight.setWeightDisplay(unit: weightUnit)) × \($0.reps)回" }.joined(separator: " / "))
                                 .font(AppFont.caption).foregroundStyle(.secondary)
                         }
                         .accessibilityElement(children: .combine)

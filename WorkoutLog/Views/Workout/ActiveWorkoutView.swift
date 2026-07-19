@@ -222,12 +222,14 @@ struct ExerciseDetailView: View {
 
     private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {
         guard let record = previousWorkoutRecord else { return nil }
-        let sets = record.exercise.sortedSets.map { (weight: $0.weight, reps: $0.reps) }
+        let sets = record.exercise.sortedSets
+            .filter(\.isCompleted)
+            .map { (weight: $0.weight, reps: $0.reps) }
         return (date: record.workout.date, sets: sets)
     }
 
     private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
-        let prevSets = previousWorkoutRecord?.exercise.sortedSets ?? []
+        let prevSets = previousWorkoutRecord?.exercise.sortedSets.filter(\.isCompleted) ?? []
         return index < prevSets.count ? prevSets[index] : prevSets.last
     }
 
@@ -239,7 +241,8 @@ struct ExerciseDetailView: View {
         for workout in allWorkouts
             .filter({ !$0.isActive && $0.id != currentWorkoutId && $0.date < currentDate })
             .sorted(by: { $0.date > $1.date }) {
-            if let exercise = matchingExercise(in: workout, template: template) {
+            if let exercise = matchingExercise(in: workout, template: template),
+               exercise.sortedSets.contains(where: \.isCompleted) {
                 return (workout, exercise)
             }
         }

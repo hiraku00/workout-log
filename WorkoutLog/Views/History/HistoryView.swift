@@ -323,10 +323,7 @@ struct HistoryView: View {
                 } else {
                     Chart {
                         ForEach(filteredWorkouts) { workout in
-                            let maxRM = workout.workoutExercises
-                                .flatMap { $0.sets }
-                                .map { $0.weight * (1.0 + Double($0.reps) / 30.0) }
-                                .max() ?? 0.0
+                            let maxRM = maxEstimatedOneRM(for: workout)
 
                             LineMark(
                                 x: .value("日付", shortDateString(for: workout.date)),
@@ -360,6 +357,13 @@ struct HistoryView: View {
             }
             .appCard(cornerRadius: AppDesign.cornerLarge, padding: 16)
         }
+    }
+
+    private func maxEstimatedOneRM(for workout: Workout) -> Double {
+        workout.completedSets
+            .filter { !$0.isBodyweight && $0.weight > 0 && $0.reps > 0 }
+            .map { $0.weight * (1.0 + Double($0.reps) / 30.0) }
+            .max() ?? 0
     }
 
     private var emptyChartPlaceholder: some View {
