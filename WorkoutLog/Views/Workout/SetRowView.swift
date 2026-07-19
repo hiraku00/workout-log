@@ -10,7 +10,6 @@ struct SetRowView: View {
 
     @AppStorage("weightUnit") private var weightUnit = "kg"
     @State private var showingRepsPicker = false
-    @State private var showingWeightEditor = false
 
     private var oneRM: Double {
         exerciseSet.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: exerciseSet.weight, reps: exerciseSet.reps)
@@ -81,17 +80,32 @@ struct SetRowView: View {
             GeometryReader { proxy in
                 let leading = SetRowLayout.setNumber + SetRowLayout.gap(for: proxy.size.width)
 
-                TextField("メモ（任意）", text: $exerciseSet.comment)
-                    .font(AppFont.body)
-                    .padding(.horizontal, 12)
-                    .frame(width: max(0, proxy.size.width - leading), height: 36)
-                    .background(AppDesign.subtleFill)
-                    .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
-                    .overlay(
-                        RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
-                            .stroke(AppDesign.hairline, lineWidth: 0.8)
-                    )
-                    .offset(x: leading)
+                HStack(spacing: 0) {
+                    Button {
+                        exerciseSet.weight = exerciseSet.isBodyweight ? 0 : ExerciseSet.bodyweightValue
+                    } label: {
+                        Text("自重")
+                            .font(AppFont.caption)
+                            .fontWeight(.semibold)
+                            .foregroundStyle(exerciseSet.isBodyweight ? Color.white : AppDesign.accent)
+                            .frame(width: max(0, leading), height: 32)
+                            .background(exerciseSet.isBodyweight ? AppDesign.accent : AppDesign.subtleFill)
+                            .clipShape(Capsule())
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(exerciseSet.isBodyweight ? "自重を解除" : "自重として記録")
+
+                    TextField("メモ（任意）", text: $exerciseSet.comment)
+                        .font(AppFont.body)
+                        .padding(.horizontal, 12)
+                        .frame(width: max(0, proxy.size.width - leading), height: 36)
+                        .background(AppDesign.subtleFill)
+                        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
+                        .overlay(
+                            RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
+                                .stroke(AppDesign.hairline, lineWidth: 0.8)
+                        )
+                }
             }
             .frame(height: 36)
         }
@@ -118,52 +132,31 @@ struct SetRowView: View {
                 "\(Int(val)) 回"
             }
         }
-        .sheet(isPresented: $showingWeightEditor) {
-            WeightEditorSheet(
-                exerciseSet: exerciseSet,
-                weightUnit: weightUnit,
-                isPresented: $showingWeightEditor
-            )
-        }
     }
 
     private func weightInput(exerciseSet: ExerciseSet) -> some View {
-        Button {
-            showingWeightEditor = true
-        } label: {
+        HStack(spacing: 0) {
             if exerciseSet.isBodyweight {
                 Text("自重")
                     .font(AppFont.input)
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity, minHeight: 40, alignment: .center)
             } else {
-                HStack(spacing: 2) {
-                    Text(displayWeight.weightString())
-                        .font(AppFont.input)
-                        .fontWeight(.semibold)
-                        .monospacedDigit()
-                        .lineLimit(1)
-                        .minimumScaleFactor(0.72)
-                    Text(weightUnit)
-                        .font(AppFont.caption2)
-                        .foregroundStyle(.secondary)
-                }
-                .frame(maxWidth: .infinity, minHeight: 40, alignment: .trailing)
-                .padding(.horizontal, 5)
+                WeightTextField(exerciseSet: exerciseSet, weightUnit: weightUnit)
+
+                Text(weightUnit)
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.trailing, 4)
             }
         }
-        .buttonStyle(.plain)
         .background(AppDesign.subtleFill)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
                 .stroke(AppDesign.hairline, lineWidth: 0.8)
         )
-        .accessibilityHint("タップして重量入力、自重、スライダーを設定できます")
-    }
-
-    private var displayWeight: Double {
-        weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+        .accessibilityHint(exerciseSet.isBodyweight ? "自重が選択されています。左下の自重ボタンで解除できます" : "数値を直接入力できます")
     }
 
     private func pickerButton(
@@ -259,121 +252,31 @@ struct SetRowColumnHeader: View {
     }
 }
 
-/// 重量を直接入力・スライダー・自重から選べる編集シート。
-private struct WeightEditorSheet: View {
+/// 文字列を保持して小数点入力を確実に扱う重量フィールド。
+private struct WeightTextField: View {
     let exerciseSet: ExerciseSet
     let weightUnit: String
 
-    @Binding var isPresented: Bool
-    @State private var isBodyweight: Bool
-    @State private var text: String
-    @State private var displayWeight: Double
-    @State private var lastNumericWeight: Double
-    @FocusState private var isInputFocused: Bool
-
-    init(exerciseSet: ExerciseSet, weightUnit: String, isPresented: Binding<Bool>) {
-        self.exerciseSet = exerciseSet
-        self.weightUnit = weightUnit
-        _isPresented = isPresented
-
-        let value = exerciseSet.isBodyweight ? 0 : Self.displayValue(for: exerciseSet.weight, unit: weightUnit)
-        _isBodyweight = State(initialValue: exerciseSet.isBodyweight)
-        _displayWeight = State(initialValue: value)
-        _lastNumericWeight = State(initialValue: value)
-        _text = State(initialValue: Self.formatted(value))
-    }
-
-    private var sliderMaximum: Double {
-        max(100, ceil(max(displayWeight, lastNumericWeight) / 25) * 25 + 25)
-    }
+    @State private var text = ""
+    @FocusState private var isFocused: Bool
 
     var body: some View {
-        NavigationStack {
-            VStack(alignment: .leading, spacing: AppDesign.spaceL) {
-                Picker("種類", selection: $isBodyweight) {
-                    Text("重量を入力").tag(false)
-                    Text("自重").tag(true)
-                }
-                .pickerStyle(.segmented)
-
-                if isBodyweight {
-                    Label("自重として記録します", systemImage: "figure.strengthtraining.traditional")
-                        .font(AppFont.body)
-                        .foregroundStyle(.secondary)
-                        .frame(maxWidth: .infinity, minHeight: 132)
-                } else {
-                    HStack(alignment: .lastTextBaseline, spacing: 6) {
-                        TextField("0", text: $text)
-                            .font(.system(.largeTitle, design: .rounded, weight: .semibold))
-                            .monospacedDigit()
-                            .keyboardType(.decimalPad)
-                            .multilineTextAlignment(.trailing)
-                            .focused($isInputFocused)
-                            .onChange(of: text) { _, newValue in
-                                updateWeight(from: newValue)
-                            }
-                            .accessibilityLabel("重量を直接入力")
-                        Text(weightUnit)
-                            .font(AppFont.title3)
-                            .foregroundStyle(.secondary)
-                    }
-                    .padding(.horizontal, AppDesign.spaceM)
-                    .padding(.vertical, AppDesign.spaceS)
-                    .background(AppDesign.subtleFill)
-                    .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
-
-                    VStack(spacing: AppDesign.spaceS) {
-                        Slider(
-                            value: $displayWeight,
-                            in: 0...sliderMaximum,
-                            step: 0.5,
-                            onEditingChanged: { editing in
-                                if !editing { syncTextAndModel() }
-                            }
-                        )
-                        .accessibilityLabel("重量をスライダーで調整")
-                        .onChange(of: displayWeight) { _, value in
-                            lastNumericWeight = value
-                            exerciseSet.weight = Self.storageValue(for: value, unit: weightUnit)
-                        }
-
-                        HStack {
-                            Text("0")
-                            Spacer()
-                            Text("\(Int(sliderMaximum)) \(weightUnit)")
-                        }
-                        .font(AppFont.caption)
-                        .foregroundStyle(.secondary)
-                    }
-                }
-
-                Spacer()
+        TextField("0", text: $text)
+            .font(AppFont.input)
+            .monospacedDigit()
+            .keyboardType(.decimalPad)
+            .multilineTextAlignment(.trailing)
+            .lineLimit(1)
+            .minimumScaleFactor(0.72)
+            .focused($isFocused)
+            .frame(maxWidth: .infinity, minHeight: 40)
+            .onAppear { refreshText() }
+            .onChange(of: text) { _, newValue in updateWeight(from: newValue) }
+            .onChange(of: exerciseSet.weight) { _, _ in
+                if !isFocused { refreshText() }
             }
-            .padding(AppDesign.spaceL)
-            .navigationTitle("重量")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("完了") { isPresented = false }
-                        .fontWeight(.semibold)
-                }
-            }
-            .onAppear {
-                if !isBodyweight { isInputFocused = true }
-            }
-            .onChange(of: isBodyweight) { _, bodyweight in
-                if bodyweight {
-                    lastNumericWeight = displayWeight
-                    exerciseSet.weight = ExerciseSet.bodyweightValue
-                    isInputFocused = false
-                } else {
-                    displayWeight = lastNumericWeight
-                    syncTextAndModel()
-                    isInputFocused = true
-                }
-            }
-        }
-        .presentationDetents([.height(330)])
+            .onChange(of: weightUnit) { _, _ in refreshText() }
+            .accessibilityLabel("重量を直接入力")
     }
 
     private func updateWeight(from input: String) {
@@ -383,22 +286,13 @@ private struct WeightEditorSheet: View {
         guard normalized.filter({ $0 == "." }).count <= 1,
               let value = Double(normalized),
               value >= 0 else { return }
-        displayWeight = value
-        lastNumericWeight = value
-        exerciseSet.weight = Self.storageValue(for: value, unit: weightUnit)
+        exerciseSet.weight = weightUnit == "lbs" ? value / 2.20462 : value
     }
 
-    private func syncTextAndModel() {
-        text = Self.formatted(displayWeight)
-        exerciseSet.weight = Self.storageValue(for: displayWeight, unit: weightUnit)
-    }
-
-    private static func displayValue(for weight: Double, unit: String) -> Double {
-        unit == "lbs" ? weight * 2.20462 : weight
-    }
-
-    private static func storageValue(for value: Double, unit: String) -> Double {
-        unit == "lbs" ? value / 2.20462 : value
+    private func refreshText() {
+        guard !exerciseSet.isBodyweight else { text = ""; return }
+        let value = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+        text = Self.formatted(value)
     }
 
     private static func formatted(_ value: Double) -> String {
