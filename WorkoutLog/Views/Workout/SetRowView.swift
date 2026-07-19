@@ -13,20 +13,7 @@ struct SetRowView: View {
     let onCompleted: () -> Void
 
     @AppStorage("weightUnit") private var weightUnit = "kg"
-    @AppStorage("weightStep") private var weightStep = 1.0
-    @State private var showingWeightPicker = false
     @State private var showingRepsPicker = false
-
-    private var weightOptions: [Double] {
-        let internalStep = weightUnit == "lbs" ? weightStep / 2.20462 : weightStep
-        return [ExerciseSet.bodyweightValue] + Array(stride(from: 0.0, through: 250.0, by: internalStep))
-    }
-
-    private var weightDisplayValue: String {
-        if exerciseSet.isBodyweight { return "自重" }
-        let display = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
-        return display.weightString(unit: "")
-    }
 
     private var oneRM: Double {
         exerciseSet.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: exerciseSet.weight, reps: exerciseSet.reps)
@@ -41,13 +28,7 @@ struct SetRowView: View {
                     .foregroundStyle(.secondary)
                     .frame(width: 44)
 
-                pickerButton(
-                    value: weightDisplayValue,
-                    unit: exerciseSet.isBodyweight ? "" : weightUnit,
-                    copyAction: onCopyWeight
-                ) {
-                    showingWeightPicker = true
-                }
+                weightInput(exerciseSet: exerciseSet)
                 .frame(maxWidth: .infinity)
 
                 pickerButton(
@@ -116,18 +97,6 @@ struct SetRowView: View {
         .swipeActions(edge: .trailing) {
             Button("削除", role: .destructive, action: onDelete)
         }
-        .sheet(isPresented: $showingWeightPicker) {
-            wheelPickerSheet(
-                title: "重量",
-                isPresented: $showingWeightPicker,
-                selection: $exerciseSet.weight,
-                options: weightOptions
-            ) { val in
-                if val == ExerciseSet.bodyweightValue { return "自重" }
-                let display = weightUnit == "lbs" ? val * 2.20462 : val
-                return display.weightString(unit: weightUnit)
-            }
-        }
         .sheet(isPresented: $showingRepsPicker) {
             wheelPickerSheet(
                 title: "レップ数",
@@ -141,6 +110,85 @@ struct SetRowView: View {
                 "\(Int(val)) 回"
             }
         }
+    }
+
+    private func weightInput(exerciseSet: ExerciseSet) -> some View {
+        HStack(spacing: 0) {
+            if let onCopyWeight {
+                Button(action: onCopyWeight) {
+                    Image(systemName: "arrow.up.circle.fill")
+                        .font(AppFont.caption)
+                        .foregroundStyle(AppDesign.accent)
+                        .frame(width: 32, height: 44)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("前のセットの重量をコピー")
+            }
+
+            if exerciseSet.isBodyweight {
+                Button {
+                    exerciseSet.weight = 0
+                } label: {
+                    Text("自重")
+                        .font(AppFont.input)
+                        .frame(maxWidth: .infinity, minHeight: 44, alignment: .trailing)
+                }
+                .buttonStyle(.plain)
+                .accessibilityHint("タップすると重量入力へ戻ります")
+            } else {
+                TextField(
+                    "0",
+                    value: displayWeightBinding(for: exerciseSet),
+                    format: .number.precision(.fractionLength(0...2))
+                )
+                .font(AppFont.input)
+                .monospacedDigit()
+                .keyboardType(.decimalPad)
+                .multilineTextAlignment(.trailing)
+                .frame(maxWidth: .infinity, minHeight: 44)
+
+                Text(weightUnit)
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.secondary)
+                    .padding(.horizontal, 5)
+            }
+
+            Menu {
+                if exerciseSet.isBodyweight {
+                    Button("重量入力へ戻す", systemImage: "number") {
+                        exerciseSet.weight = 0
+                    }
+                } else {
+                    Button("自重として記録", systemImage: "figure.strengthtraining.traditional") {
+                        exerciseSet.weight = ExerciseSet.bodyweightValue
+                    }
+                }
+            } label: {
+                Image(systemName: "ellipsis")
+                    .font(AppFont.caption)
+                    .foregroundStyle(.secondary)
+                    .frame(width: 28, height: 44)
+            }
+            .accessibilityLabel("重量入力のオプション")
+        }
+        .background(AppDesign.subtleFill)
+        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
+        .overlay(
+            RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous)
+                .stroke(AppDesign.hairline, lineWidth: 0.8)
+        )
+    }
+
+    private func displayWeightBinding(for exerciseSet: ExerciseSet) -> Binding<Double> {
+        Binding(
+            get: {
+                weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+            },
+            set: { displayValue in
+                let sanitized = max(0, displayValue)
+                exerciseSet.weight = weightUnit == "lbs" ? sanitized / 2.20462 : sanitized
+            }
+        )
     }
 
     private func pickerButton(

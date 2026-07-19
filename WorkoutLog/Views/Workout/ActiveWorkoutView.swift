@@ -31,8 +31,8 @@ struct ExerciseDetailView: View {
                     onEditDuration: { showingTimerDurationPicker = true }
                 )
 
-                if let previousWorkoutInfo = previousWorkoutInfo {
-                    previousWorkoutSection(previousWorkoutInfo)
+                if let template = workoutExercise.exerciseTemplate {
+                    previousWorkoutSection(template: template, info: previousWorkoutInfo)
                 }
 
                 SetRowColumnHeader()
@@ -141,90 +141,137 @@ struct ExerciseDetailView: View {
         .padding(.horizontal, 12)
     }
 
-    private func previousWorkoutSection(_ info: (date: Date, sets: [(weight: Double, reps: Int)])) -> some View {
+    private func previousWorkoutSection(
+        template: ExerciseTemplate,
+        info: (date: Date, sets: [(weight: Double, reps: Int)])?
+    ) -> some View {
         VStack(alignment: .leading, spacing: 8) {
             HStack {
                 Text("前回の記録")
-                    .font(AppFont.caption)
+                    .font(AppFont.subheadline)
                     .fontWeight(.semibold)
-                    .foregroundStyle(.secondary)
-                Spacer()
-                Text(info.date.formatted(.dateTime.year().month().day()))
-                    .font(AppFont.caption)
-                    .foregroundStyle(.tertiary)
-            }
 
-            VStack(alignment: .leading, spacing: 4) {
-                ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
-                    HStack(spacing: 8) {
-                        Text("\(index + 1)")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                            .frame(width: 20, alignment: .leading)
-                        Text(set.weight.setWeightDisplay(unit: weightUnit))
-                            .font(AppFont.caption)
-                            .fontWeight(.semibold)
-                        Text("×")
-                            .font(AppFont.caption)
-                            .foregroundStyle(.secondary)
-                        Text("\(set.reps)回")
-                            .font(AppFont.caption)
-                            .fontWeight(.semibold)
-                    }
+                if let info {
+                    Text(info.date.displayString)
+                        .font(AppFont.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                Spacer()
+
+                NavigationLink {
+                    ExerciseHistoryDetailView(template: template, workouts: historyWorkouts)
+                } label: {
+                    Label("履歴", systemImage: "clock.arrow.circlepath")
+                        .font(AppFont.caption)
+                        .fontWeight(.semibold)
                 }
             }
+
+            if let info {
+                VStack(spacing: 0) {
+                    ForEach(Array(info.sets.enumerated()), id: \.offset) { index, set in
+                        if index > 0 { Divider() }
+
+                        HStack(spacing: 10) {
+                            Text("\(index + 1)")
+                                .font(AppFont.caption)
+                                .foregroundStyle(.secondary)
+                                .frame(width: 24, alignment: .leading)
+                            Text(set.weight.setWeightDisplay(unit: weightUnit))
+                                .font(AppFont.subheadline)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                            Text("×")
+                                .font(AppFont.caption)
+                                .foregroundStyle(.secondary)
+                            Text("\(set.reps)回")
+                                .font(AppFont.subheadline)
+                                .fontWeight(.semibold)
+                                .monospacedDigit()
+                            Spacer()
+
+                            let estimatedOneRM = set.weight == ExerciseSet.bodyweightValue
+                                ? 0
+                                : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
+                            if estimatedOneRM > 0 {
+                                Text("1RM \(estimatedOneRM.setWeightDisplay(unit: weightUnit))")
+                                    .font(AppFont.caption)
+                                    .foregroundStyle(.secondary)
+                                    .monospacedDigit()
+                            }
+                        }
+                        .padding(.vertical, 7)
+                    }
+                }
+            } else {
+                Text("この種目の過去記録はありません")
+                    .font(AppFont.caption)
+                    .foregroundStyle(.secondary)
+                    .padding(.vertical, 6)
+            }
         }
-        .padding(12)
         .appCard(cornerRadius: AppDesign.cornerMedium, padding: 12)
         .padding(.horizontal, 12)
     }
 
     private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {
-        guard let template = workoutExercise.exerciseTemplate else { return nil }
-        let currentWorkoutId = workoutExercise.workout?.id
-        let previousExercise = allWorkouts
-            .filter { $0.id != currentWorkoutId }
-            .sorted { $0.date > $1.date }
-            .first { workout in
-                workout.workoutExercises.contains { $0.exerciseTemplate?.id == template.id }
-            }
-            .flatMap { workout in
-                workout.workoutExercises.first { $0.exerciseTemplate?.id == template.id }
-            }
-
-        guard let prevExercise = previousExercise else { return nil }
-        let sets = prevExercise.sortedSets.map { (weight: $0.weight, reps: $0.reps) }
-        return (date: prevExercise.workout?.date ?? Date(), sets: sets)
+        guard let record = previousWorkoutRecord else { return nil }
+        let sets = record.exercise.sortedSets.map { (weight: $0.weight, reps: $0.reps) }
+        return (date: record.workout.date, sets: sets)
     }
 
     private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
-        guard let template = workoutExercise.exerciseTemplate else { return nil }
-        let currentWorkoutId = workoutExercise.workout?.id
-        let previousExercise = allWorkouts
-            .filter { $0.id != currentWorkoutId }
-            .sorted { $0.date > $1.date }
-            .first { workout in
-                workout.workoutExercises.contains { $0.exerciseTemplate?.id == template.id }
-            }
-            .flatMap { workout in
-                workout.workoutExercises.first { $0.exerciseTemplate?.id == template.id }
-            }
-
-        let prevSets = previousExercise?.sortedSets ?? []
+        let prevSets = previousWorkoutRecord?.exercise.sortedSets ?? []
         return index < prevSets.count ? prevSets[index] : prevSets.last
     }
 
+    private var previousWorkoutRecord: (workout: Workout, exercise: WorkoutExercise)? {
+        guard let template = workoutExercise.exerciseTemplate else { return nil }
+        let currentWorkoutId = workoutExercise.workout?.id
+        let currentDate = workoutExercise.workout?.date ?? .now
+
+        for workout in allWorkouts
+            .filter({ !$0.isActive && $0.id != currentWorkoutId && $0.date < currentDate })
+            .sorted(by: { $0.date > $1.date }) {
+            if let exercise = matchingExercise(in: workout, template: template) {
+                return (workout, exercise)
+            }
+        }
+        return nil
+    }
+
+    private var historyWorkouts: [Workout] {
+        let currentWorkoutId = workoutExercise.workout?.id
+        return allWorkouts.filter { !$0.isActive && $0.id != currentWorkoutId }
+    }
+
+    private func matchingExercise(in workout: Workout, template: ExerciseTemplate) -> WorkoutExercise? {
+        workout.workoutExercises.first { exercise in
+            guard let candidate = exercise.exerciseTemplate else { return false }
+            return candidate.representsSameExercise(as: template)
+        }
+    }
+
     private func startTimer() {
+        timer?.invalidate()
+        timer = nil
         timerRunning = true
         timerSeconds = timerDuration
-        timer = Timer.scheduledTimer(withTimeInterval: 1.0, repeats: true) { _ in
-            if timerSeconds > 0 {
+
+        let nextTimer = Timer(timeInterval: 1.0, repeats: true) { _ in
+            if timerSeconds > 1 {
                 timerSeconds -= 1
             } else {
-                stopTimer()
+                timerSeconds = 0
+                timerRunning = false
+                timer?.invalidate()
+                timer = nil
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
             }
         }
+        timer = nextTimer
+        RunLoop.main.add(nextTimer, forMode: .common)
     }
 
     private func stopTimer() {

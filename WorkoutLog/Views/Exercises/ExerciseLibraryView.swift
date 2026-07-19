@@ -315,7 +315,10 @@ struct ExerciseHistoryDetailView: View {
 
     private var records: [(Workout, WorkoutExercise)] {
         workouts.compactMap { workout in
-            workout.workoutExercises.first(where: { $0.exerciseTemplate?.id == template.id }).map { (workout, $0) }
+            workout.workoutExercises.first(where: { exercise in
+                guard let candidate = exercise.exerciseTemplate else { return false }
+                return candidate.representsSameExercise(as: template)
+            }).map { (workout, $0) }
         }.sorted { $0.0.date > $1.0.date }
     }
 

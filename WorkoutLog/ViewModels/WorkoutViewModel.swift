@@ -127,14 +127,14 @@ final class WorkoutViewModel {
         }
     }
 
-    /// セットを追加する（前のセットの値を引き継ぐ）
+    /// セットを追加する（重量だけを引き継ぎ、回数は既定値へ戻す）
     func addSet(to workoutExercise: WorkoutExercise, context: ModelContext) {
         let lastSet = workoutExercise.sortedSets.last
         let order = workoutExercise.sets.count
         let newSet = ExerciseSet(
             order: order,
             weight: lastSet?.weight ?? 0,
-            reps: lastSet?.reps ?? 10
+            reps: 10
         )
         newSet.comment = lastSet?.comment ?? ""
         newSet.workoutExercise = workoutExercise

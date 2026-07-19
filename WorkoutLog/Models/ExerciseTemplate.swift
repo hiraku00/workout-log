@@ -22,4 +22,11 @@ final class ExerciseTemplate {
         self.muscleGroup = muscleGroup
         self.isCustom = isCustom
     }
+
+    /// プリセット再同期でIDが変わった履歴も、同じ内蔵種目として参照する。
+    /// カスタム種目は同名でも別種目になり得るためID一致だけを許可する。
+    func representsSameExercise(as other: ExerciseTemplate) -> Bool {
+        if id == other.id { return true }
+        return !isCustom && !other.isCustom && name == other.name
+    }
 }
