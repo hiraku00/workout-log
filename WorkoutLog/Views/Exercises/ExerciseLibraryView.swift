@@ -199,7 +199,7 @@ struct ExerciseLibraryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(.ultraThinMaterial)
+        .background(AppDesign.appBackground)
         .sensoryFeedback(.selection, trigger: selectedCategory)
     }
 

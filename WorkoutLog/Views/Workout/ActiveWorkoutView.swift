@@ -1,6 +1,8 @@
 import SwiftUI
 import SwiftData
-import AudioToolbox
+import AVFoundation
+import AlarmKit
+import UserNotifications
 
 /// 種目詳細画面 - セット入力・休憩タイマー
 struct ExerciseDetailView: View {
@@ -10,13 +12,18 @@ struct ExerciseDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutViewModel.self) private var viewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @AppStorage("weightUnit") private var weightUnit = "kg"
     @AppStorage("restTimerDuration") private var timerDuration = 60
 
     @State private var timerRunning = false
     @State private var timerSeconds = 60
     @State private var timer: Timer?
+    @State private var timerEndDate: Date?
     @State private var showingTimerDurationPicker = false
+    @State private var showingTimerCompletionAlert = false
+    @State private var timerCompletionAlarm = TimerCompletionAlarm()
+    @State private var usingSystemAlarm = false
 
     private let timerDurationOptions = Array(stride(from: 10, through: 300, by: 5))
 
@@ -121,8 +128,21 @@ struct ExerciseDetailView: View {
             }
             .presentationDetents([.height(260)])
         }
-        .onDisappear {
-            stopTimer()
+        .alert("休憩終了", isPresented: $showingTimerCompletionAlert) {
+            Button("次のセットへ", role: .cancel) {}
+        } message: {
+            Text("次のセットを始めましょう。")
+        }
+        .onChange(of: scenePhase) { _, phase in
+            switch phase {
+            case .active:
+                synchronizeTimerAfterForeground()
+            case .background:
+                timer?.invalidate()
+                timer = nil
+            default:
+                break
+            }
         }
     }
 
@@ -267,21 +287,19 @@ struct ExerciseDetailView: View {
     }
 
     private func startTimer() {
-        timer?.invalidate()
-        timer = nil
+        stopTicker()
+        cancelTimerNotification()
         timerRunning = true
         timerSeconds = timerDuration
+        let endDate = Date().addingTimeInterval(TimeInterval(timerDuration))
+        timerEndDate = endDate
+        scheduleTimerAlert(at: endDate)
+        startTicker()
+    }
 
-        let nextTimer = Timer(timeInterval: 1.0, repeats: true) { _ in
-            if timerSeconds > 1 {
-                timerSeconds -= 1
-            } else {
-                timerSeconds = 0
-                timerRunning = false
-                timer?.invalidate()
-                timer = nil
-                notifyTimerFinished()
-            }
+    private func startTicker() {
+        let nextTimer = Timer(timeInterval: 0.5, repeats: true) { _ in
+            updateTimerFromEndDate(presentCompletionAlert: true)
         }
         timer = nextTimer
         RunLoop.main.add(nextTimer, forMode: .common)
@@ -289,22 +307,195 @@ struct ExerciseDetailView: View {
 
     private func stopTimer() {
         timerRunning = false
-        timer?.invalidate()
-        timer = nil
+        timerEndDate = nil
+        stopTicker()
+        cancelTimerNotification()
         timerSeconds = timerDuration
     }
 
-    private func notifyTimerFinished() {
-        // 1回だけでは気づきにくいため、効果音と通知バイブを間隔を空けて3回鳴らす。
-        AudioServicesPlayAlertSound(1005)
-        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    private func stopTicker() {
+        timer?.invalidate()
+        timer = nil
+    }
 
-        for delay in [0.65, 1.3] {
-            DispatchQueue.main.asyncAfter(deadline: .now() + delay) {
-                AudioServicesPlayAlertSound(1005)
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+    private func synchronizeTimerAfterForeground() {
+        guard timerRunning else { return }
+        updateTimerFromEndDate(presentCompletionAlert: false)
+        if timerRunning { startTicker() }
+    }
+
+    private func updateTimerFromEndDate(presentCompletionAlert: Bool) {
+        guard let timerEndDate else { return }
+        let remaining = timerEndDate.timeIntervalSinceNow
+        guard remaining > 0 else {
+            timerSeconds = 0
+            timerRunning = false
+            self.timerEndDate = nil
+            stopTicker()
+            if presentCompletionAlert && !usingSystemAlarm {
+                playTimerCompletionAlert()
+                showingTimerCompletionAlert = true
+            }
+            usingSystemAlarm = false
+            return
+        }
+        timerSeconds = Int(ceil(remaining))
+    }
+
+    private func scheduleTimerAlert(at endDate: Date) {
+        usingSystemAlarm = false
+        Task { @MainActor in
+            await scheduleAlarmKitTimer(at: endDate)
+        }
+    }
+
+    @available(iOS 26.0, *)
+    @MainActor
+    private func scheduleAlarmKitTimer(at endDate: Date) async {
+        do {
+            let manager = AlarmManager.shared
+            let authorization: AlarmManager.AuthorizationState
+            if manager.authorizationState == .notDetermined {
+                authorization = try await manager.requestAuthorization()
+            } else {
+                authorization = manager.authorizationState
+            }
+
+            guard authorization == .authorized,
+                  timerRunning,
+                  timerEndDate == endDate else {
+                scheduleTimerNotification(at: endDate)
+                return
+            }
+
+            let alert: AlarmPresentation.Alert
+            if #available(iOS 26.1, *) {
+                alert = AlarmPresentation.Alert(title: "休憩終了")
+            } else {
+                let stopButton = AlarmButton(
+                    text: "停止",
+                    textColor: .white,
+                    systemImageName: "stop.circle.fill"
+                )
+                alert = AlarmPresentation.Alert(title: "休憩終了", stopButton: stopButton)
+            }
+
+            let attributes = AlarmAttributes<RestTimerAlarmMetadata>(
+                presentation: AlarmPresentation(alert: alert),
+                tintColor: AppDesign.accent
+            )
+            let configuration = AlarmManager.AlarmConfiguration<RestTimerAlarmMetadata>.alarm(
+                schedule: .fixed(endDate),
+                attributes: attributes,
+                sound: .default
+            )
+
+            try? manager.cancel(id: timerAlarmID)
+            _ = try await manager.schedule(id: timerAlarmID, configuration: configuration)
+            usingSystemAlarm = true
+        } catch {
+            scheduleTimerNotification(at: endDate)
+            print("AlarmKitでの休憩アラーム登録に失敗しました: \(error)")
+        }
+    }
+
+    private func scheduleTimerNotification(at endDate: Date) {
+        let center = UNUserNotificationCenter.current()
+        center.getNotificationSettings { settings in
+            switch settings.authorizationStatus {
+            case .notDetermined:
+                center.requestAuthorization(options: [.alert, .sound]) { granted, _ in
+                    if granted { addTimerNotification(to: center, at: endDate) }
+                }
+            case .authorized, .provisional, .ephemeral:
+                addTimerNotification(to: center, at: endDate)
+            default:
+                break
             }
         }
+    }
+
+    private func addTimerNotification(to center: UNUserNotificationCenter, at endDate: Date) {
+        let content = UNMutableNotificationContent()
+        content.title = "休憩終了"
+        content.body = "次のセットを始めましょう。"
+        content.interruptionLevel = .timeSensitive
+        content.sound = .default
+
+        let trigger = UNTimeIntervalNotificationTrigger(
+            timeInterval: max(1, endDate.timeIntervalSinceNow),
+            repeats: false
+        )
+        let request = UNNotificationRequest(identifier: timerNotificationIdentifier, content: content, trigger: trigger)
+        center.removePendingNotificationRequests(withIdentifiers: [timerNotificationIdentifier])
+        center.add(request)
+    }
+
+    private func cancelTimerNotification() {
+        UNUserNotificationCenter.current()
+            .removePendingNotificationRequests(withIdentifiers: [timerNotificationIdentifier])
+        try? AlarmManager.shared.cancel(id: timerAlarmID)
+        usingSystemAlarm = false
+    }
+
+    private var timerNotificationIdentifier: String {
+        "rest-timer-\(workoutExercise.id.uuidString)"
+    }
+
+    private var timerAlarmID: UUID {
+        workoutExercise.id
+    }
+
+    /// 前面表示中は通知バナーに依存せず、同梱アラーム音を直接鳴らす。
+    private func playTimerCompletionAlert() {
+        timerCompletionAlarm.play()
+    }
+
+}
+
+@available(iOS 26.0, *)
+private struct RestTimerAlarmMetadata: AlarmMetadata {}
+
+/// 消音スイッチの状態に左右されず、前面表示中の休憩終了を伝える短いアラーム。
+private final class TimerCompletionAlarm: NSObject, AVAudioPlayerDelegate {
+    private var player: AVAudioPlayer?
+
+    func play() {
+        guard let url = Bundle.main.url(forResource: "rest_timer_alarm", withExtension: "wav") else {
+            return
+        }
+
+        do {
+            let audioSession = AVAudioSession.sharedInstance()
+            try audioSession.setCategory(.playback, mode: .default, options: [.duckOthers])
+            try audioSession.setActive(true)
+
+            let player = try AVAudioPlayer(contentsOf: url)
+            player.delegate = self
+            player.volume = 1
+            player.prepareToPlay()
+            player.play()
+            self.player = player
+        } catch {
+            print("休憩終了アラームの再生に失敗しました: \(error)")
+        }
+    }
+
+    func audioPlayerDidFinishPlaying(_: AVAudioPlayer, successfully _: Bool) {
+        player = nil
+        restoreOtherAudio()
+    }
+
+    func audioPlayerDecodeErrorDidOccur(_: AVAudioPlayer, error _: Error?) {
+        player = nil
+        restoreOtherAudio()
+    }
+
+    private func restoreOtherAudio() {
+        try? AVAudioSession.sharedInstance().setActive(
+            false,
+            options: [.notifyOthersOnDeactivation]
+        )
     }
 }
 
@@ -363,7 +554,9 @@ struct DayWorkoutContent: View {
 
     @State private var showingExercisePicker = false
     @State private var showingDeleteConfirmation = false
+    @State private var showingExerciseDeleteConfirmation = false
     @State private var showingCopyConfirmation = false
+    @State private var exerciseToDelete: WorkoutExercise?
     @State private var workout: Workout?
 
     var body: some View {
@@ -416,6 +609,26 @@ struct DayWorkoutContent: View {
                 }
             }
             Button("キャンセル", role: .cancel) {}
+        }
+        .confirmationDialog(
+            "この種目を削除しますか？",
+            isPresented: $showingExerciseDeleteConfirmation,
+            titleVisibility: .visible,
+            presenting: exerciseToDelete
+        ) { exercise in
+            Button("種目を削除", role: .destructive) {
+                if let workout {
+                    withAnimation {
+                        viewModel.removeExercise(exercise, from: workout, context: modelContext)
+                    }
+                }
+                exerciseToDelete = nil
+            }
+            Button("キャンセル", role: .cancel) {
+                exerciseToDelete = nil
+            }
+        } message: { exercise in
+            Text("\(exercise.exerciseTemplate?.name ?? "この種目")とすべてのセット記録を削除します。")
         }
         .onAppear {
             ensureWorkout()
@@ -470,6 +683,15 @@ struct DayWorkoutContent: View {
                 }
                 .disabled(index == workout.sortedExercises.count - 1)
                 .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を下へ移動")
+
+                Button(role: .destructive) {
+                    exerciseToDelete = exercise
+                    showingExerciseDeleteConfirmation = true
+                } label: {
+                    Image(systemName: "trash")
+                        .frame(width: 34, height: 34)
+                }
+                .accessibilityLabel("\(exercise.exerciseTemplate?.name ?? "種目")を削除")
             }
             .font(AppFont.subheadline)
             .fontWeight(.semibold)
@@ -492,9 +714,8 @@ struct DayWorkoutContent: View {
             }
             .disabled(index == workout.sortedExercises.count - 1)
             Button("削除", role: .destructive) {
-                withAnimation {
-                    viewModel.removeExercise(exercise, from: workout, context: modelContext)
-                }
+                exerciseToDelete = exercise
+                showingExerciseDeleteConfirmation = true
             }
         }
     }

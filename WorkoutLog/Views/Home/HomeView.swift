@@ -280,17 +280,14 @@ private struct HomeMetric: View {
 }
 
 private struct HomeSurfaceModifier: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
-
     func body(content: Content) -> some View {
         content
-            .background(reduceTransparency ? AnyShapeStyle(AppDesign.elevatedSurface) : AnyShapeStyle(.thinMaterial))
+            .background(AppDesign.surface)
             .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous))
             .overlay {
                 RoundedRectangle(cornerRadius: AppDesign.cornerLarge, style: .continuous)
                     .strokeBorder(AppDesign.materialEdge, lineWidth: 0.7)
             }
-            .shadow(color: .black.opacity(0.045), radius: 14, x: 0, y: 6)
     }
 }
 

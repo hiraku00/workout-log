@@ -4,6 +4,44 @@ import XCTest
 
 @MainActor
 final class WorkoutViewModelTests: XCTestCase {
+    func testWeightDisplaySeparatesValueAndUnit() {
+        XCTAssertEqual(23.5.weightString(unit: "kg"), "23.5 kg")
+        XCTAssertEqual(100.0.weightString(unit: "kg"), "100 kg")
+        XCTAssertEqual(10.0.setWeightDisplay(unit: "lbs"), "22.0 lbs")
+        XCTAssertEqual(23.5.weightString(), "23.5")
+        XCTAssertEqual(0.0.weightString(unit: "kg"), "0")
+        XCTAssertEqual(ExerciseSet.bodyweightValue.setWeightDisplay(unit: "kg"), "自重")
+    }
+
+    func testExerciseReferenceUsesGoogleImageSearchInBrave() throws {
+        let url = try XCTUnwrap(ExerciseReference.imageSearchURL(for: "チェストプレス"))
+        let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+
+        XCTAssertEqual(components.scheme, "https")
+        XCTAssertEqual(components.host, "www.google.com")
+        XCTAssertEqual(components.path, "/search")
+        XCTAssertFalse(url.isFileURL)
+        XCTAssertEqual(
+            components.queryItems?.first(where: { $0.name == "tbm" })?.value,
+            "isch"
+        )
+        XCTAssertEqual(
+            components.queryItems?.first(where: { $0.name == "q" })?.value,
+            "チェストプレス 正しいフォーム"
+        )
+
+        let browserURL = try XCTUnwrap(ExerciseReference.braveOpenURL(for: url))
+        let browserComponents = try XCTUnwrap(
+            URLComponents(url: browserURL, resolvingAgainstBaseURL: false)
+        )
+        XCTAssertEqual(browserComponents.scheme, "brave")
+        XCTAssertEqual(browserComponents.host, "open-url")
+        XCTAssertEqual(
+            browserComponents.queryItems?.first(where: { $0.name == "url" })?.value,
+            url.absoluteString
+        )
+    }
+
     func testAddingSetKeepsWeightButResetsRepsToDefault() throws {
         let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
         let container = try ModelContainer(
@@ -79,5 +117,23 @@ final class WorkoutViewModelTests: XCTestCase {
         XCTAssertEqual(workout.totalReps, 8)
         XCTAssertEqual(workout.totalVolume, 640)
         XCTAssertEqual(workout.completedExerciseCount, 1)
+    }
+
+    func testEstimatedOneRMUsesSelectedFormula() {
+        let defaults = UserDefaults.standard
+        let previousValue = defaults.object(forKey: "oneRMFormula")
+        defer {
+            if let previousValue {
+                defaults.set(previousValue, forKey: "oneRMFormula")
+            } else {
+                defaults.removeObject(forKey: "oneRMFormula")
+            }
+        }
+
+        defaults.set(OneRMFormula.epley.rawValue, forKey: "oneRMFormula")
+        XCTAssertEqual(WorkoutViewModel.estimateOneRM(weight: 14, reps: 10), 18.67, accuracy: 0.01)
+
+        defaults.set(OneRMFormula.oConner.rawValue, forKey: "oneRMFormula")
+        XCTAssertEqual(WorkoutViewModel.estimateOneRM(weight: 14, reps: 10), 17.5, accuracy: 0.01)
     }
 }

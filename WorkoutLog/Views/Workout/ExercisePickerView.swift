@@ -117,7 +117,7 @@ struct ExercisePickerView: View {
                     }
                     .buttonStyle(AppPrimaryButtonStyle())
                     .padding(16)
-                    .background(.ultraThinMaterial)
+                    .background(AppDesign.appBackground)
                 }
             }
         }

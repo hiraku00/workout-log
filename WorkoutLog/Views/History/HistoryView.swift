@@ -107,7 +107,7 @@ struct HistoryView: View {
             .padding(.horizontal, 16)
             .padding(.vertical, 10)
         }
-        .background(.ultraThinMaterial)
+        .background(AppDesign.appBackground)
         .sensoryFeedback(.selection, trigger: selectedCategory)
     }
 
@@ -118,7 +118,7 @@ struct HistoryView: View {
             segmentButton(title: "グラフ")
         }
         .padding(4)
-        .background(.thinMaterial)
+        .background(AppDesign.surface)
         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
         .overlay(
             RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)

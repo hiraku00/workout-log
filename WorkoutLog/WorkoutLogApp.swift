@@ -1,8 +1,10 @@
 import SwiftUI
 import SwiftData
+import UserNotifications
 
 @main
 struct WorkoutLogApp: App {
+    @UIApplicationDelegateAdaptor(WorkoutLogAppDelegate.self) private var appDelegate
     let modelContainer: ModelContainer
 
     init() {
@@ -24,8 +26,27 @@ struct WorkoutLogApp: App {
         WindowGroup {
             AppRootView()
                 .modelContainer(modelContainer)
-                .preferredColorScheme(.light)
         }
+    }
+}
+
+/// 前面では通知表示を抑止する。完了音とポップアップは画面側で提示する。
+/// バックグラウンドではシステムが通常の通知バナーと音を提示する。
+final class WorkoutLogAppDelegate: NSObject, UIApplicationDelegate, UNUserNotificationCenterDelegate {
+    func application(
+        _: UIApplication,
+        didFinishLaunchingWithOptions _: [UIApplication.LaunchOptionsKey: Any]? = nil
+    ) -> Bool {
+        UNUserNotificationCenter.current().delegate = self
+        return true
+    }
+
+    func userNotificationCenter(
+        _: UNUserNotificationCenter,
+        willPresent _: UNNotification,
+        withCompletionHandler completionHandler: @escaping (UNNotificationPresentationOptions) -> Void
+    ) {
+        completionHandler([])
     }
 }
 
@@ -34,12 +55,14 @@ struct AppRootView: View {
     @Environment(\.modelContext) private var modelContext
     @Query private var exerciseTemplates: [ExerciseTemplate]
     @Query(filter: #Predicate<Workout> { $0.isActive }) private var activeWorkouts: [Workout]
+    @AppStorage("appearanceMode") private var appearanceMode = "system"
     @State private var viewModel = WorkoutViewModel()
     @State private var isInitialized = false
 
     var body: some View {
         ContentView()
             .environment(viewModel)
+            .preferredColorScheme(preferredColorScheme)
             .task {
                 if !isInitialized {
                     seedExerciseTemplatesIfNeeded()
@@ -49,6 +72,14 @@ struct AppRootView: View {
                     isInitialized = true
                 }
             }
+    }
+
+    private var preferredColorScheme: ColorScheme? {
+        switch appearanceMode {
+        case "light": .light
+        case "dark": .dark
+        default: nil
+        }
     }
 
     /// 内蔵カタログとデータベースを同期する。廃止種目は履歴保護のためアーカイブする。

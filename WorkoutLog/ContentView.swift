@@ -4,15 +4,6 @@ import SwiftUI
 struct ContentView: View {
     @State private var selectedTab = 0
 
-    init() {
-        let tabAppearance = UITabBarAppearance()
-        tabAppearance.configureWithTransparentBackground()
-        tabAppearance.backgroundEffect = UIBlurEffect(style: .systemChromeMaterial)
-        tabAppearance.shadowColor = .clear
-        UITabBar.appearance().standardAppearance = tabAppearance
-        UITabBar.appearance().scrollEdgeAppearance = tabAppearance
-    }
-
     var body: some View {
         TabView(selection: $selectedTab) {
             // ホームタブ
