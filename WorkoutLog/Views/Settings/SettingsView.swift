@@ -4,6 +4,8 @@ import SwiftData
 /// 設定画面
 struct SettingsView: View {
     @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("appearanceMode") private var appearanceMode = "system"
+    @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @AppStorage("defaultSetCount") private var defaultSetCount = 3
     @AppStorage("restTimerDuration") private var restTimerDuration = 60
     @Query private var allWorkouts: [Workout]
@@ -40,13 +42,31 @@ struct SettingsView: View {
                     .padding(.vertical, 4)
                 }
 
-                Section("トレーニング") {
+                Section("外観") {
+                    Picker("表示モード", selection: $appearanceMode) {
+                        Text("システム設定").tag("system")
+                        Text("ライト").tag("light")
+                        Text("ダーク").tag("dark")
+                    }
+                }
+
+                Section {
                     Stepper("既定セット数：\(defaultSetCount)", value: $defaultSetCount, in: 1...10)
                     Picker("休憩時間", selection: $restTimerDuration) {
                         ForEach([30, 45, 60, 75, 90, 120, 180], id: \.self) { seconds in
                             Text("\(seconds)秒").tag(seconds)
                         }
                     }
+
+                    Picker("推定1RM", selection: $oneRMFormula) {
+                        ForEach(OneRMFormula.allCases) { formula in
+                            Text(formula.displayName).tag(formula.rawValue)
+                        }
+                    }
+                } header: {
+                    Text("トレーニング")
+                } footer: {
+                    Text("休憩終了はiOSのアラームで確実にお知らせします。再生中の音楽や動画は停止する場合があります。")
                 }
 
                 // アプリ情報

@@ -6,20 +6,21 @@ Workout Logは、日々の筋力トレーニングをiPhoneで記録するSwiftU
 
 - 日付ごとのワークアウト記録
 - 重量、回数、推定1RM、セットNotesの入力
-- 休憩タイマー
+- 休憩タイマー（AlarmKit。利用できない場合はローカル通知へフォールバック）
 - 月間カレンダーとトレーニング実施日の表示
 - 総ボリュームと最大推定1RMのグラフ
 - 過去日のワークアウトを今日へコピー
 - 前セットの重量、回数、Notesのコピーと自動継承
 - プリセット種目とカスタム種目
 - kg / lbs表示切り替え
-- IPAex明朝を使用した日本語UI
+- 種目のフォーム参考画像をGoogle画像検索で確認（Braveが利用可能な場合はBraveで開く）
+- iOS標準のSan Franciscoとセマンティックカラーに適応する日本語UI
 
 ## 必要環境
 
 - macOS
-- Xcode 15以降
-- iOS 17以降
+- Xcode 26以降
+- iOS 26以降
 - XcodeGen
 
 ## セットアップ
@@ -58,6 +59,8 @@ xcodebuild \
 | ExerciseTemplate | SwiftData | プリセット種目とカスタム種目 |
 | 重量単位 | AppStorage | kg / lbs |
 | 休憩時間 | AppStorage | タイマーの既定秒数 |
+| 表示モード | AppStorage | システム / ライト / ダーク |
+| 推定1RM方式 | AppStorage | Epley式 / O’Conner式 |
 
 初回起動時、`ExercisePresets.swift`に定義された15種目をSwiftDataへ投入します。プリセットの元データはJSON等の外部ファイルではなく、Swiftコードで管理しています。手動追加したカスタム種目もプリセットと同じSwiftDataへ端末内データとして保存されます。以後は保存済みデータを使用するため、起動のたびに重複追加されることはありません。
 
@@ -70,17 +73,19 @@ WorkoutLog/
   Models/          SwiftDataモデル
   ViewModels/      記録・コピー・集計ロジック
   Views/           SwiftUI画面
-  Utilities/       デザイン、フォント、プリセット
-  Resources/Fonts/ IPAex明朝とライセンス
+  Utilities/       デザイン、共通処理、プリセット
+  Resources/       休憩終了アラーム音
 project.yml        XcodeGen設定
 ```
 
 `WorkoutLog.xcodeproj`は`project.yml`から生成されるためGit管理の対象外です。
 
-## フォント
+## UI方針
 
-IPAex明朝 Ver.004.01を同梱しています。フォント本体、Readme、IPAフォントライセンスは`WorkoutLog/Resources/Fonts`に収録しています。
+文字、カラー、背景はiOSのDynamic Type・Dark Mode・セマンティックカラーに従います。アプリ独自の固定フォントや固定ライトテーマは使用せず、端末の表示設定に適応します。
+
+休憩タイマーは、AlarmKitが利用できる場合にOS管理のアラームで終了を伝えます。利用不可または登録に失敗した場合はローカル通知へフォールバックします。OSアラームは再生中の音楽・動画を中断する場合があり、他社アプリの再生を本アプリから自動再開することはできません。
 
 ## License
 
-アプリのソースコードは[MIT License](LICENSE)で公開します。IPAex明朝には別途IPAフォントライセンスが適用されます。
+アプリのソースコードは[MIT License](LICENSE)で公開します。

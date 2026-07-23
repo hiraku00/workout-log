@@ -92,9 +92,9 @@ extension Double {
         if self == ExerciseSet.bodyweightValue { return "自重" }
         if self == 0 { return "0" }
         if self == Double(Int(self)) {
-            return unit.isEmpty ? "\(Int(self))" : "\(Int(self))\(unit)"
+            return unit.isEmpty ? "\(Int(self))" : "\(Int(self)) \(unit)"
         }
-        return unit.isEmpty ? String(format: "%.1f", self) : String(format: "%.1f\(unit)", self)
+        return unit.isEmpty ? String(format: "%.1f", self) : String(format: "%.1f %@", self, unit)
     }
 
     /// セット重量の表示（自重・単位変換対応）
@@ -132,7 +132,7 @@ enum SetRowLayout {
     static let oneRM: CGFloat = 56        // 999.9
     static let complete: CGFloat = 32
     static let delete: CGFloat = 32
-    static let minimumGap: CGFloat = 8
+    static let minimumGap: CGFloat = 6
 
     static let totalColumnWidth = setNumber + weight + reps + oneRM + complete + delete
 
@@ -141,12 +141,14 @@ enum SetRowLayout {
     }
 
     // 入力行だけはコピー操作と自重ボタンを重量・回数の列内に含める。
-    static let inputWeight: CGFloat = 124
-    static let inputReps: CGFloat = 68
-    static let inputColumnWidth = setNumber + inputWeight + inputReps + oneRM + complete
+    // 上セットのコピー操作と自重ボタンを表示しても、「999.9 kg」を通常の文字サイズで読める幅にする。
+    // 回数列と列間余白を詰め、その分を入力頻度の高い重量列へ配分する。
+    static let inputWeight: CGFloat = 120
+    static let inputReps: CGFloat = 66
+    static let inputColumnWidth = setNumber + inputWeight + inputReps + oneRM + complete + delete
 
     static func inputGap(for containerWidth: CGFloat) -> CGFloat {
-        max(minimumGap, (containerWidth - inputColumnWidth) / 4)
+        max(minimumGap, (containerWidth - inputColumnWidth) / 5)
     }
 }
 
@@ -184,7 +186,7 @@ enum AppDesign {
     }
 
     static var elevatedSurface: Color {
-        Color(.secondarySystemGroupedBackground)
+        Color(.systemBackground)
     }
 
     static var subtleFill: Color {
@@ -192,7 +194,7 @@ enum AppDesign {
     }
 
     static var hairline: Color {
-        Color.primary.opacity(0.09)
+        Color(.separator).opacity(0.55)
     }
 
     static var accent: Color {
@@ -208,7 +210,7 @@ enum AppDesign {
     }
 
     static var materialEdge: Color {
-        Color.white.opacity(0.22)
+        Color(.separator).opacity(0.32)
     }
 }
 
@@ -228,20 +230,18 @@ enum AppFont {
 }
 
 struct AppCardModifier: ViewModifier {
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
     var cornerRadius: CGFloat = AppDesign.cornerLarge
     var padding: CGFloat = 16
 
     func body(content: Content) -> some View {
         content
             .padding(padding)
-            .background(reduceTransparency ? AnyShapeStyle(AppDesign.elevatedSurface) : AnyShapeStyle(.thinMaterial))
+            .background(AppDesign.surface)
             .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(AppDesign.materialEdge, lineWidth: 0.7)
             )
-            .shadow(color: .black.opacity(0.055), radius: 16, x: 0, y: 7)
     }
 }
 
@@ -251,21 +251,19 @@ struct AppPrimaryButtonStyle: ButtonStyle {
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
             .font(AppFont.headline).fontWeight(.semibold)
-            .foregroundStyle(Color(.systemBackground))
+            .foregroundStyle(.white)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 50)
-            .background(AppDesign.accent)
-            .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
             .brightness(configuration.isPressed ? -0.08 : 0)
-            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1))
-            .animation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.24, dampingFraction: 1), value: configuration.isPressed)
+            .opacity(configuration.isPressed ? 0.78 : 1)
+            .animation(reduceMotion ? .linear(duration: 0.1) : .easeOut(duration: 0.12), value: configuration.isPressed)
+            .modifier(AppProminentControlSurface())
             .contentShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
     }
 }
 
 struct AppSecondaryButtonStyle: ButtonStyle {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
 
     func makeBody(configuration: Configuration) -> some View {
         configuration.label
@@ -273,15 +271,14 @@ struct AppSecondaryButtonStyle: ButtonStyle {
             .foregroundStyle(.primary)
             .frame(maxWidth: .infinity)
             .frame(minHeight: 48)
-            .background(reduceTransparency ? AnyShapeStyle(AppDesign.elevatedSurface) : AnyShapeStyle(.thinMaterial))
+            .background(AppDesign.surface)
             .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
             .overlay(
                 RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)
                     .stroke(AppDesign.hairline, lineWidth: 0.5)
             )
-            .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.97 : 1))
             .opacity(configuration.isPressed ? 0.82 : 1)
-            .animation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.24, dampingFraction: 1), value: configuration.isPressed)
+            .animation(reduceMotion ? .linear(duration: 0.1) : .easeOut(duration: 0.12), value: configuration.isPressed)
     }
 }
 
@@ -293,10 +290,44 @@ struct AppIconButtonStyle: ButtonStyle {
             .font(.system(size: 17, weight: .semibold))
             .foregroundStyle(.primary)
             .frame(width: 44, height: 44)
-            .background(configuration.isPressed ? AppDesign.accentFill : AppDesign.subtleFill)
-            .clipShape(Circle())
             .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.9 : 1))
             .animation(reduceMotion ? .linear(duration: 0.1) : .spring(response: 0.22, dampingFraction: 1), value: configuration.isPressed)
+            .modifier(AppIconControlSurface(isPressed: configuration.isPressed))
+    }
+}
+
+/// iOS 26以降では、コンテンツではなく操作コントロールだけにLiquid Glassを適用する。
+private struct AppProminentControlSurface: ViewModifier {
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(
+                .regular.tint(AppDesign.accent).interactive(),
+                in: RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)
+            )
+        } else {
+            content
+                .background(AppDesign.accent)
+                .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
+        }
+    }
+}
+
+private struct AppIconControlSurface: ViewModifier {
+    let isPressed: Bool
+
+    @ViewBuilder
+    func body(content: Content) -> some View {
+        if #available(iOS 26.0, *) {
+            content.glassEffect(
+                .regular.interactive(),
+                in: Circle()
+            )
+        } else {
+            content
+                .background(isPressed ? AppDesign.accentFill : AppDesign.subtleFill)
+                .clipShape(Circle())
+        }
     }
 }
 
@@ -334,20 +365,10 @@ struct AppSectionHeader: View {
     }
 }
 
-/// 画面の最背面。大きな装飾を動かさず、淡い光だけで奥行きを作る。
+/// 画面の最背面。iOSのセマンティック背景色だけを使用し、外観モードに適応させる。
 struct AppScreenBackground: View {
     var body: some View {
-        ZStack {
-            AppDesign.appBackground
-            RadialGradient(
-                colors: [AppDesign.accent.opacity(0.11), .clear],
-                center: .topTrailing,
-                startRadius: 12,
-                endRadius: 360
-            )
-            .ignoresSafeArea()
-        }
-        .ignoresSafeArea()
+        AppDesign.appBackground.ignoresSafeArea()
     }
 }
 
@@ -415,8 +436,7 @@ struct AppEmptyState: View {
 
 // MARK: - 種目の動作参考画像
 enum ExerciseReference {
-    /// 種目名から、正しいフォームを確認できる検索URLを生成する。
-    /// 通常のHTTPS URLを使い、端末で設定されたデフォルトブラウザで開く。
+    /// 種目名からGoogle画像検索URLを生成する。
     static func imageSearchURL(for exerciseName: String) -> URL? {
         var components = URLComponents(string: "https://www.google.com/search")
         components?.queryItems = [
@@ -426,24 +446,27 @@ enum ExerciseReference {
         return components?.url
     }
 
-    /// Google アプリの Universal Link を避け、Brave で検索結果を開く。
-    /// Brave が入っていない端末では、通常の HTTPS URL にフォールバックする。
+    /// GoogleアプリのUniversal Linkを避け、Braveへ
+    /// Google画像検索URLを渡す。Braveがない場合は通常のHTTPS URLへフォールバックする。
     static func openImageSearch(for exerciseName: String) {
         guard let searchURL = imageSearchURL(for: exerciseName) else { return }
 
-        var braveComponents = URLComponents()
-        braveComponents.scheme = "brave"
-        braveComponents.host = "open-url"
-        braveComponents.queryItems = [
-            URLQueryItem(name: "url", value: searchURL.absoluteString)
-        ]
-
-        if let braveURL = braveComponents.url,
-           UIApplication.shared.canOpenURL(braveURL) {
-            UIApplication.shared.open(braveURL)
+        if let browserURL = braveOpenURL(for: searchURL),
+           UIApplication.shared.canOpenURL(browserURL) {
+            UIApplication.shared.open(browserURL)
         } else {
             UIApplication.shared.open(searchURL)
         }
+    }
+
+    static func braveOpenURL(for webURL: URL) -> URL? {
+        var components = URLComponents()
+        components.scheme = "brave"
+        components.host = "open-url"
+        components.queryItems = [
+            URLQueryItem(name: "url", value: webURL.absoluteString)
+        ]
+        return components.url
     }
 }
 

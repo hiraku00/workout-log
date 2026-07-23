@@ -2,6 +2,28 @@ import Foundation
 import SwiftUI
 import SwiftData
 
+/// 推定1RMの計算式。比較対象のアプリと同じ基準で記録を見られるよう選択可能にする。
+enum OneRMFormula: String, CaseIterable, Identifiable {
+    case epley
+    case oConner
+
+    var id: String { rawValue }
+
+    var displayName: String {
+        switch self {
+        case .epley: "Epley式"
+        case .oConner: "O’Conner式"
+        }
+    }
+
+    var detail: String {
+        switch self {
+        case .epley: "重量 × (1 + 回数 ÷ 30)"
+        case .oConner: "重量 × (1 + 回数 × 0.025)"
+        }
+    }
+}
+
 /// アクティブなワークアウトの状態を管理するViewModel
 @Observable
 final class WorkoutViewModel {
@@ -212,10 +234,19 @@ final class WorkoutViewModel {
 
     // MARK: - ヘルパー
 
-    /// 推定1RMを計算する（Epley式の簡易版: 重量 × (1 + レップ数/30)）
+    /// 設定中の方式で推定1RMを計算する。
     static func estimateOneRM(weight: Double, reps: Int) -> Double {
         guard weight > 0, reps > 0 else { return 0 }
-        return weight * (1.0 + Double(reps) / 30.0)
+        let formula = OneRMFormula(
+            rawValue: UserDefaults.standard.string(forKey: "oneRMFormula") ?? ""
+        ) ?? .epley
+
+        switch formula {
+        case .epley:
+            return weight * (1.0 + Double(reps) / 30.0)
+        case .oConner:
+            return weight * (1.0 + Double(reps) * 0.025)
+        }
     }
 
     /// 指定した種目の全履歴からPR（Personal Record = 最高重量）を取得する

@@ -67,6 +67,16 @@ struct SetRowView: View {
                 .frame(width: SetRowLayout.complete, height: 40)
                 .accessibilityLabel(exerciseSet.isCompleted ? "セット完了を取り消す" : "セットを完了")
 
+                Spacer(minLength: SetRowLayout.minimumGap)
+
+                Button(role: .destructive, action: onDelete) {
+                    Image(systemName: "trash")
+                        .font(AppFont.subheadline)
+                        .foregroundStyle(.red)
+                        .frame(width: SetRowLayout.delete, height: 40)
+                }
+                .buttonStyle(.plain)
+                .accessibilityLabel("セットを削除")
             }
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(.vertical, 2)
@@ -81,7 +91,7 @@ struct SetRowView: View {
                     TextField("メモ（任意）", text: $exerciseSet.comment)
                         .font(AppFont.body)
                         .padding(.horizontal, 12)
-                        .frame(width: max(0, proxy.size.width - leading - noteCopyWidth - SetRowLayout.delete), height: 36)
+                        .frame(width: max(0, proxy.size.width - leading - noteCopyWidth), height: 36)
                         .background(AppDesign.subtleFill)
                         .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerSmall, style: .continuous))
                         .overlay(
@@ -100,14 +110,6 @@ struct SetRowView: View {
                         .accessibilityLabel("上のセットのメモをコピー")
                     }
 
-                    Button(role: .destructive, action: onDelete) {
-                        Image(systemName: "trash")
-                            .font(AppFont.subheadline)
-                            .foregroundStyle(.red)
-                            .frame(width: SetRowLayout.delete, height: 36)
-                    }
-                    .buttonStyle(.plain)
-                    .accessibilityLabel("セットを削除")
                 }
             }
             .frame(height: 36)
@@ -121,7 +123,7 @@ struct SetRowView: View {
         .swipeActions(edge: .trailing) {
             Button("削除", role: .destructive, action: onDelete)
         }
-        .accessibilityHint("メモ欄右端のゴミ箱でセットを削除できます")
+        .accessibilityHint("完了の右にあるゴミ箱でセットを削除できます")
         .sheet(isPresented: $showingRepsPicker) {
             wheelPickerSheet(
                 title: "レップ数",
@@ -156,12 +158,16 @@ struct SetRowView: View {
                     .fontWeight(.semibold)
                     .frame(maxWidth: .infinity, minHeight: 40, alignment: .center)
             } else {
-                WeightTextField(exerciseSet: exerciseSet, weightUnit: weightUnit)
+                HStack(spacing: 4) {
+                    WeightTextField(exerciseSet: exerciseSet, weightUnit: weightUnit)
+                        .layoutPriority(1)
 
-                Text(weightUnit)
-                    .font(AppFont.caption2)
-                    .foregroundStyle(.secondary)
-                    .padding(.trailing, 4)
+                    Text(weightUnit)
+                        .font(AppFont.caption2)
+                        .foregroundStyle(.secondary)
+                        .fixedSize()
+                }
+                .padding(.trailing, 4)
             }
 
             Button {
@@ -279,6 +285,8 @@ struct SetRowColumnHeader: View {
                 .frame(width: SetRowLayout.oneRM)
             Spacer(minLength: SetRowLayout.minimumGap)
             Text("完了").frame(width: SetRowLayout.complete)
+            Spacer(minLength: SetRowLayout.minimumGap)
+            Text("削除").frame(width: SetRowLayout.delete)
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .font(AppFont.caption)
@@ -305,7 +313,7 @@ private struct WeightTextField: View {
             .keyboardType(.decimalPad)
             .multilineTextAlignment(.trailing)
             .lineLimit(1)
-            .minimumScaleFactor(0.72)
+            .minimumScaleFactor(0.9)
             .focused($isFocused)
             .frame(maxWidth: .infinity, minHeight: 40)
             .onAppear { refreshText() }
