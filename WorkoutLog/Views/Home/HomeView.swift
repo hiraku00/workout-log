@@ -115,6 +115,10 @@ struct HomeView: View {
                     .fontWeight(.semibold)
                     .foregroundStyle(.secondary)
 
+                Text("自己ベスト：完了セットの最大推定1RM（1回分の推定重量・自重種目は最大回数）")
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.tertiary)
+
                 VStack(spacing: 0) {
                     ForEach(Array(summary.personalBestUpdates.enumerated()), id: \.element.id) { index, update in
                         if index > 0 {

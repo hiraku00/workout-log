@@ -47,6 +47,12 @@ xcodebuild \
   build
 ```
 
+### 実機への定期自動リビルド（任意）
+
+無料のApple ID（Personal Team）で実機ビルドする場合、provisioning profileの有効期限が7日間のため、期限切れでアプリが起動できなくなることがあります。[scripts/rebuild_and_install.sh](scripts/rebuild_and_install.sh)は、実機が接続されている（USBまたは同一ネットワーク上のWi-Fi）ときに再ビルド・再インストールしてこれを防ぐスクリプトです。
+
+`launchd`のLaunchAgentから毎朝呼び出し、スクリプト内部で前回成功から5日経過しているかを判定して実際のビルドを間引く想定です（`REBUILD_INTERVAL_DAYS`で調整可能）。`DEVICE_ID`は環境依存のため、利用する場合は`xcrun devicectl list devices`で確認した自分の端末のIdentifierに書き換えてください。LaunchAgentのplist自体はリポジトリ管理外（`~/Library/LaunchAgents/`配下）です。
+
 ## データ保存
 
 ユーザーの入力データはSwiftDataにより端末内のアプリ専用領域へ保存されます。Gitリポジトリや外部サーバーには保存されません。

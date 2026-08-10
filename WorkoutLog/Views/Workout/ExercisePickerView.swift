@@ -11,9 +11,8 @@ struct ExercisePickerView: View {
     @State private var selectedTemplateIDs: Set<UUID> = []
     @State private var expandedCategories: Set<String> = []
     @State private var searchText = ""
-    @State private var showingAddCustom = false
     @State private var customExerciseName = ""
-    @State private var customExerciseCategory = "胸"
+    @State private var customExerciseCategorySelection: CustomExerciseCategorySelection?
     @State private var customExerciseMuscle = ""
     @Environment(\.modelContext) private var modelContext
 
@@ -57,8 +56,7 @@ struct ExercisePickerView: View {
                     } footer: {
                         HStack {
                             Button("種目を追加") {
-                                customExerciseCategory = category
-                                showingAddCustom = true
+                                customExerciseCategorySelection = CustomExerciseCategorySelection(category: category)
                             }
                             .buttonStyle(.plain)
                             .accessibilityLabel("\(category)に種目を追加")
@@ -105,8 +103,8 @@ struct ExercisePickerView: View {
                     Button("キャンセル") { dismiss() }
                 }
             }
-            .sheet(isPresented: $showingAddCustom) {
-                addCustomExerciseSheet
+            .sheet(item: $customExerciseCategorySelection) { selection in
+                addCustomExerciseSheet(category: selection.category)
             }
             .safeAreaInset(edge: .bottom) {
                 if !selectedTemplateIDs.isEmpty {
@@ -130,11 +128,11 @@ struct ExercisePickerView: View {
 
     // MARK: - カスタム種目追加シート
 
-    private var addCustomExerciseSheet: some View {
+    private func addCustomExerciseSheet(category: String) -> some View {
         NavigationStack {
             Form {
                 Section("カテゴリ") {
-                    LabeledContent("部位", value: customExerciseCategory)
+                    LabeledContent("部位", value: category)
                 }
                 Section("種目名") {
                     TextField("例：ハンギングニーレイズ", text: $customExerciseName)
@@ -147,12 +145,12 @@ struct ExercisePickerView: View {
             .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .navigationBarLeading) {
-                    Button("キャンセル") { showingAddCustom = false }
+                    Button("キャンセル") { customExerciseCategorySelection = nil }
                 }
                 ToolbarItem(placement: .navigationBarTrailing) {
                     Button("追加") {
-                        addCustomExercise()
-                        showingAddCustom = false
+                        addCustomExercise(category: category)
+                        customExerciseCategorySelection = nil
                     }
                     .fontWeight(.semibold)
                     .disabled(!canAddCustomExercise)
@@ -161,16 +159,21 @@ struct ExercisePickerView: View {
         }
     }
 
-    private func addCustomExercise() {
+    private func addCustomExercise(category: String) {
         let template = ExerciseTemplate(
             name: customExerciseName.trimmingCharacters(in: .whitespaces),
-            category: customExerciseCategory,
-            muscleGroup: customExerciseMuscle.isEmpty ? customExerciseCategory : customExerciseMuscle,
+            category: category,
+            muscleGroup: customExerciseMuscle.isEmpty ? category : customExerciseMuscle,
             isCustom: true
         )
         modelContext.insert(template)
         customExerciseName = ""
         customExerciseMuscle = ""
+    }
+
+    private struct CustomExerciseCategorySelection: Identifiable {
+        let category: String
+        var id: String { category }
     }
 
     private var canAddCustomExercise: Bool {
