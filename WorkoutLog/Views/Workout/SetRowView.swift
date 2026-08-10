@@ -304,6 +304,7 @@ private struct WeightTextField: View {
     let weightUnit: String
 
     @State private var text = ""
+    @State private var lastSyncedWeight: Double?
     @FocusState private var isFocused: Bool
 
     var body: some View {
@@ -316,10 +317,18 @@ private struct WeightTextField: View {
             .minimumScaleFactor(0.9)
             .focused($isFocused)
             .frame(maxWidth: .infinity, minHeight: 40)
-            .onAppear { refreshText() }
+            .onAppear {
+                refreshText()
+                lastSyncedWeight = exerciseSet.weight
+            }
             .onChange(of: text) { _, newValue in updateWeight(from: newValue) }
-            .onChange(of: exerciseSet.weight) { _, _ in
-                if !isFocused { refreshText() }
+            .onChange(of: exerciseSet.weight) { _, newValue in
+                // 入力中の変更はupdateWeightで同期済み。それ以外の変更（コピー等）は
+                // フォーカス中でも表示文字列へ反映する。
+                if lastSyncedWeight != newValue {
+                    refreshText()
+                    lastSyncedWeight = newValue
+                }
             }
             .onChange(of: weightUnit) { _, _ in refreshText() }
             .accessibilityLabel("重量を直接入力")
@@ -329,10 +338,16 @@ private struct WeightTextField: View {
         let normalized = input
             .replacingOccurrences(of: ",", with: ".")
             .replacingOccurrences(of: "．", with: ".")
+        if normalized.isEmpty {
+            exerciseSet.weight = 0
+            lastSyncedWeight = exerciseSet.weight
+            return
+        }
         guard normalized.filter({ $0 == "." }).count <= 1,
               let value = Double(normalized),
               value >= 0 else { return }
         exerciseSet.weight = weightUnit == "lbs" ? value / 2.20462 : value
+        lastSyncedWeight = exerciseSet.weight
     }
 
     private func refreshText() {
@@ -342,6 +357,7 @@ private struct WeightTextField: View {
     }
 
     private static func formatted(_ value: Double) -> String {
+        guard value != 0 else { return "" }
         let result = String(format: "%.2f", value)
         return result
             .replacingOccurrences(of: #"\.0+$"#, with: "", options: .regularExpression)
