@@ -207,9 +207,9 @@ final class WorkoutViewModel {
 
     // MARK: - コピー機能
 
-    /// 過去のワークアウトを今日にコピーする（同日の記録があれば種目を追加）
-    func copyWorkout(_ source: Workout, context: ModelContext) {
-        let target = getOrCreateWorkout(for: Date(), context: context)
+    /// 過去のワークアウトを指定日にコピーする（同日の記録があれば種目を追加）。省略時は今日にコピーする
+    func copyWorkout(_ source: Workout, to destinationDate: Date = Date(), context: ModelContext) {
+        let target = getOrCreateWorkout(for: destinationDate, context: context)
 
         for sourceExercise in source.sortedExercises {
             let newExercise = WorkoutExercise(order: target.workoutExercises.count)
