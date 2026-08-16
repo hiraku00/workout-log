@@ -556,6 +556,7 @@ struct DayWorkoutContent: View {
     @State private var showingDeleteConfirmation = false
     @State private var showingExerciseDeleteConfirmation = false
     @State private var showingCopyConfirmation = false
+    @State private var showingCopyDatePicker = false
     @State private var exerciseToDelete: WorkoutExercise?
     @State private var workout: Workout?
 
@@ -630,9 +631,23 @@ struct DayWorkoutContent: View {
         } message: { exercise in
             Text("\(exercise.exerciseTemplate?.name ?? "この種目")とすべてのセット記録を削除します。")
         }
+        .sheet(isPresented: $showingCopyDatePicker) {
+            if let workout {
+                CopyToDateSheet { date in
+                    performCopy(workout, to: date)
+                }
+            }
+        }
         .onAppear {
             ensureWorkout()
         }
+    }
+
+    /// 指定日にコピーしてホームタブへ移動する
+    private func performCopy(_ workout: Workout, to date: Date) {
+        viewModel.copyWorkout(workout, to: date, context: modelContext)
+        viewModel.openDayOnHome(Calendar.current.startOfDay(for: date))
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     private func ensureWorkout() {
@@ -772,14 +787,15 @@ struct DayWorkoutContent: View {
         }
         .buttonStyle(AppPrimaryButtonStyle())
         .confirmationDialog(
-            "この日のメニューを今日の記録として開始しますか？",
+            "この日のメニューをどの日の記録として開始しますか？",
             isPresented: $showingCopyConfirmation,
             titleVisibility: .visible
         ) {
             Button("今日にコピーして開始") {
-                viewModel.copyWorkout(workout, context: modelContext)
-                viewModel.openDayOnHome(Calendar.current.startOfDay(for: Date()))
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                performCopy(workout, to: Date())
+            }
+            Button("過去の日付を選んでコピー") {
+                showingCopyDatePicker = true
             }
             Button("キャンセル", role: .cancel) {}
         } message: {

@@ -11,6 +11,8 @@ struct WorkoutDetailView: View {
     @State private var showingActiveWorkout = false
     @State private var showingEditConfirmation = false
     @State private var showingCopyConfirmation = false
+    @State private var showingCopyDatePicker = false
+    @State private var copyDestinationDate = Date()
     @AppStorage("weightUnit") private var weightUnit = "kg"
 
     var body: some View {
@@ -40,23 +42,37 @@ struct WorkoutDetailView: View {
         .navigationTitle(workout.date.formatted(.dateTime.year().month().day()))
         .navigationBarTitleDisplayMode(.inline)
         .confirmationDialog(
-            "このメニューを今日のローテーションとして開始しますか？",
+            "このメニューをどの日のローテーションとして開始しますか？",
             isPresented: $showingCopyConfirmation,
             titleVisibility: .visible
         ) {
             Button("今日にコピーして開始") {
-                viewModel.copyWorkout(workout, context: modelContext)
-                showingActiveWorkout = true
-                UINotificationFeedbackGenerator().notificationOccurred(.success)
+                performCopy(to: Date())
+            }
+            Button("過去の日付を選んでコピー") {
+                showingCopyDatePicker = true
             }
             Button("キャンセル", role: .cancel) {}
         } message: {
             Text("種目・重量・回数を引き継ぎます。")
         }
+        .sheet(isPresented: $showingCopyDatePicker) {
+            CopyToDateSheet { date in
+                performCopy(to: date)
+            }
+        }
         // アクティブワークアウト画面
         .fullScreenCover(isPresented: $showingActiveWorkout) {
-            ActiveWorkoutView(targetDate: Date())
+            ActiveWorkoutView(targetDate: copyDestinationDate)
         }
+    }
+
+    /// 指定日にコピーしてアクティブワークアウト画面を開く
+    private func performCopy(to date: Date) {
+        copyDestinationDate = date
+        viewModel.copyWorkout(workout, to: date, context: modelContext)
+        showingActiveWorkout = true
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
     // MARK: - サブビュー
