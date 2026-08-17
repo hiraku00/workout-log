@@ -53,9 +53,17 @@ xcodebuild \
 
 `launchd`のLaunchAgentから毎朝呼び出し、スクリプト内部で前回成功から5日経過しているかを判定して実際のビルドを間引く想定です（`REBUILD_INTERVAL_DAYS`で調整可能）。`DEVICE_ID`は環境依存のため、利用する場合は`xcrun devicectl list devices`で確認した自分の端末のIdentifierに書き換えてください。LaunchAgentのplist自体はリポジトリ管理外（`~/Library/LaunchAgents/`配下）です。
 
+このスクリプトは**アプリのアンインストールを一切行いません**。`devicectl device install app`によるアップグレードインストールのみを行うため、端末内のSwiftDataは保持されます（アンインストールするとアプリのデータ領域ごと削除されるため、絶対に自動化フローへ組み込まないでください）。
+
+### アプリデータの自動バックアップ
+
+アプリは`scenePhase`が`.background`になるたび（ホーム画面に戻るたび）、全記録を`Documents/workoutlog_backup.json`へ自動でJSON書き出しします（[DataBackup.swift](WorkoutLog/Utilities/DataBackup.swift)）。ユーザー操作は不要です。
+
+`scripts/rebuild_and_install.sh`は、ビルド・インストールの前に必ずこのJSONファイルだけを`devicectl device copy from`（`appDataContainer`ドメイン指定）でMac側の`~/Library/Application Support/WorkoutLogBackups/`へ取得し、直近30世代を保持します。これはFinder/iTunesが行うような端末全体のバックアップとは異なり、**このアプリのデータのみ**を対象にした軽量なコピーです。
+
 ## データ保存
 
-ユーザーの入力データはSwiftDataにより端末内のアプリ専用領域へ保存されます。Gitリポジトリや外部サーバーには保存されません。
+ユーザーの入力データはSwiftDataにより端末内のアプリ専用領域へ保存されます。Gitリポジトリや外部サーバーには保存されません（自動バックアップされたJSONのみ、上記の通りローカルMacの`~/Library/Application Support/WorkoutLogBackups/`に保存されます）。
 
 | データ | 保存先 | 内容 |
 |---|---|---|
