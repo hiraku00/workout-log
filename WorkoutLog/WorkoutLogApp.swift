@@ -22,10 +22,17 @@ struct WorkoutLogApp: App {
         }
     }
 
+    @Environment(\.scenePhase) private var scenePhase
+
     var body: some Scene {
         WindowGroup {
             AppRootView()
                 .modelContainer(modelContainer)
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .background {
+                DataBackupExporter.export(modelContext: modelContainer.mainContext)
+            }
         }
     }
 }
