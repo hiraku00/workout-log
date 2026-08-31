@@ -42,21 +42,13 @@ if [[ -z "$DEVICE_LINE" ]] || echo "$DEVICE_LINE" | grep -qE "unavailable|shutdo
 fi
 
 
-# Pull the app's own auto-exported JSON backup (Documents/workoutlog_backup.json,
-# written by the app itself on every background transition) off the device
-# before touching the install. This only ever reads app data, never the
-# device as a whole. Never call `devicectl device uninstall` in this script —
-# an in-place `install` preserves the data container, an uninstall wipes it.
-xcrun devicectl device copy from \
-  --device "$DEVICE_ID" \
-  --domain-type appDataContainer \
-  --domain-identifier "$BUNDLE_ID" \
-  --source Documents/workoutlog_backup.json \
-  --destination "$BACKUP_DIR/backup_$(date +%Y%m%d_%H%M%S).json" >> "$LOG_FILE" 2>&1 || \
-  echo "Backup pull failed or no backup file yet on device (ok on first run)." >> "$LOG_FILE"
-
-# Keep only the 30 most recent backups.
-ls -t "$BACKUP_DIR"/backup_*.json 2>/dev/null | tail -n +31 | while read -r old; do rm -f -- "$old"; done
+# Pull the app's own auto-exported JSON backup off the device before
+# touching the install (same logic also runs daily on its own via
+# daily_backup.sh / com.hiraku.workoutlog.dailybackup.plist). This only
+# ever reads app data, never the device as a whole. Never call
+# `devicectl device uninstall` in this script — an in-place `install`
+# preserves the data container, an uninstall wipes it.
+"$PROJECT_DIR/scripts/daily_backup.sh" >> "$LOG_FILE" 2>&1 || true
 
 cd "$PROJECT_DIR"
 
@@ -74,6 +66,22 @@ xcodebuild \
   build >> "$LOG_FILE" 2>&1
 
 xcrun devicectl device install app --device "$DEVICE_ID" "$APP_PATH" >> "$LOG_FILE" 2>&1
+
+# Push the most recent Mac-side backup back onto the device as a "pending
+# restore" file. The app merges it in by ID on next launch and skips any
+# record that already exists, so this is a no-op when the data container
+# survived the install and only matters when it didn't (profile fully
+# expired, app was reinstalled from scratch, etc).
+LATEST_BACKUP=$(ls -t "$BACKUP_DIR"/backup_*.json 2>/dev/null | head -n 1 || true)
+if [[ -n "$LATEST_BACKUP" ]]; then
+  xcrun devicectl device copy to \
+    --device "$DEVICE_ID" \
+    --domain-type appDataContainer \
+    --domain-identifier "$BUNDLE_ID" \
+    --source "$LATEST_BACKUP" \
+    --destination Documents/workoutlog_backup_restore.json >> "$LOG_FILE" 2>&1 || \
+    echo "Restore file push failed." >> "$LOG_FILE"
+fi
 
 date +%s > "$STATE_FILE"
 echo "=== $(date) : done ===" >> "$LOG_FILE"

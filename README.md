@@ -59,7 +59,15 @@ xcodebuild \
 
 アプリは`scenePhase`が`.background`になるたび（ホーム画面に戻るたび）、全記録を`Documents/workoutlog_backup.json`へ自動でJSON書き出しします（[DataBackup.swift](WorkoutLog/Utilities/DataBackup.swift)）。ユーザー操作は不要です。
 
-`scripts/rebuild_and_install.sh`は、ビルド・インストールの前に必ずこのJSONファイルだけを`devicectl device copy from`（`appDataContainer`ドメイン指定）でMac側の`~/Library/Application Support/WorkoutLogBackups/`へ取得し、直近30世代を保持します。これはFinder/iTunesが行うような端末全体のバックアップとは異なり、**このアプリのデータのみ**を対象にした軽量なコピーです。
+Mac側では[scripts/daily_backup.sh](scripts/daily_backup.sh)が、このJSONファイルだけを`devicectl device copy from`（`appDataContainer`ドメイン指定）で`~/Library/Application Support/WorkoutLogBackups/`へ取得し、直近30世代を保持します。これはFinder/iTunesが行うような端末全体のバックアップとは異なり、**このアプリのデータのみ**を対象にした軽量なコピーです。
+
+`daily_backup.sh`は`com.hiraku.workoutlog.dailybackup.plist`（LaunchAgent）から毎晩21時に単独で実行され、5日おきの再ビルドとは独立してMac側の控えを最新化します（データ消失時に失われうる範囲を最大5日から最大1日に縮小）。`scripts/rebuild_and_install.sh`もビルド前に同じ処理を呼び出すため、重複して実装はしていません。
+
+### アプリデータの自動復元
+
+インストール直後、スクリプトはMac側の最新バックアップを`devicectl device copy to`で端末の`Documents/workoutlog_backup_restore.json`へ送り込みます。アプリは次回起動時にこのファイルを検出し、IDが一致しない（＝まだ存在しない）記録だけをSwiftDataへ取り込みます（[DataBackupImporter](WorkoutLog/Utilities/DataBackup.swift)）。
+
+データコンテナが健在な通常のアップグレードでは全レコードが既に存在するため実質何もしません。provisioning profileの完全な失効や再インストールでデータコンテナが失われた場合のみ、直近のバックアップから自動的に復元されます。取り込み後、復元用ファイルは削除されます。
 
 ## データ保存
 

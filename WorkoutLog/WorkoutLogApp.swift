@@ -72,6 +72,7 @@ struct AppRootView: View {
             .preferredColorScheme(preferredColorScheme)
             .task {
                 if !isInitialized {
+                    DataBackupImporter.restoreIfNeeded(modelContext: modelContext)
                     seedExerciseTemplatesIfNeeded()
                     if let active = activeWorkouts.first {
                         viewModel.resumeWorkout(active)
