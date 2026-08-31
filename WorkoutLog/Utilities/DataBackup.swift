@@ -49,6 +49,8 @@ struct WorkoutBackup: Codable {
 /// ユーザー操作を必要とせず、バックグラウンド遷移のたびに最新化される。
 enum DataBackupExporter {
     static let backupFileName = "workoutlog_backup.json"
+    /// Mac側から復元用JSONを送り込む際のファイル名（自動書き出し先とは別名にし、上書き競合を避ける）
+    static let restoreFileName = "workoutlog_backup_restore.json"
 
     static func export(modelContext: ModelContext) {
         do {
@@ -106,6 +108,77 @@ enum DataBackupExporter {
             try data.write(to: url, options: .atomic)
         } catch {
             print("バックアップ書き出しに失敗しました: \(error)")
+        }
+    }
+}
+
+/// Mac側から送り込まれた復元用JSON（workoutlog_backup_restore.json）を取り込む。
+/// IDが一致する既存レコードはスキップするため、データが健在な通常のアップグレード
+/// インストールでは何もしない（＝安全に毎回呼び出せる）。アンインストール等でデータ
+/// コンテナが失われていた場合のみ、実質的な復元として働く。
+enum DataBackupImporter {
+    static func restoreIfNeeded(modelContext: ModelContext) {
+        let url = URL.documentsDirectory.appending(path: DataBackupExporter.restoreFileName)
+        guard let data = try? Data(contentsOf: url) else { return }
+        defer { try? FileManager.default.removeItem(at: url) }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        guard let backup = try? decoder.decode(WorkoutBackup.self, from: data) else {
+            print("復元用バックアップの読み込みに失敗しました")
+            return
+        }
+
+        do {
+            var templatesByID = Dictionary(
+                uniqueKeysWithValues: try modelContext.fetch(FetchDescriptor<ExerciseTemplate>()).map { ($0.id, $0) }
+            )
+            for templateBackup in backup.exerciseTemplates where templatesByID[templateBackup.id] == nil {
+                let template = ExerciseTemplate(
+                    name: templateBackup.name,
+                    category: templateBackup.category,
+                    muscleGroup: templateBackup.muscleGroup,
+                    isCustom: templateBackup.isCustom
+                )
+                template.id = templateBackup.id
+                template.isArchived = templateBackup.isArchived
+                modelContext.insert(template)
+                templatesByID[templateBackup.id] = template
+            }
+
+            let existingWorkoutIDs = Set(try modelContext.fetch(FetchDescriptor<Workout>()).map(\.id))
+            for workoutBackup in backup.workouts where !existingWorkoutIDs.contains(workoutBackup.id) {
+                let workout = Workout(date: workoutBackup.date, name: workoutBackup.name)
+                workout.id = workoutBackup.id
+                workout.duration = workoutBackup.duration
+                workout.notes = workoutBackup.notes
+                // 進行中フラグは復元しない。中断済みワークアウトが「進行中」として
+                // 突然再開されるのを避けるため、常に完了扱いとして復元する。
+                workout.isActive = false
+                modelContext.insert(workout)
+
+                for exerciseBackup in workoutBackup.exercises {
+                    let exercise = WorkoutExercise(order: exerciseBackup.order)
+                    exercise.id = exerciseBackup.id
+                    exercise.notes = exerciseBackup.notes
+                    exercise.workout = workout
+                    exercise.exerciseTemplate = exerciseBackup.exerciseTemplateID.flatMap { templatesByID[$0] }
+                    modelContext.insert(exercise)
+
+                    for setBackup in exerciseBackup.sets {
+                        let set = ExerciseSet(order: setBackup.order, weight: setBackup.weight, reps: setBackup.reps)
+                        set.id = setBackup.id
+                        set.isCompleted = setBackup.isCompleted
+                        set.comment = setBackup.comment
+                        set.workoutExercise = exercise
+                        modelContext.insert(set)
+                    }
+                }
+            }
+
+            try modelContext.save()
+        } catch {
+            print("バックアップの復元に失敗しました: \(error)")
         }
     }
 }
