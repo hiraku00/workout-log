@@ -16,6 +16,8 @@ APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphoneos/WorkoutLog.app"
 STATE_FILE="$LOG_DIR/last_success"
 REBUILD_INTERVAL_DAYS=5
 BACKUP_DIR="$HOME/Library/Application Support/WorkoutLogBackups"
+PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
+PROFILE_REFRESH_THRESHOLD_DAYS=2
 
 mkdir -p "$LOG_DIR" "$BACKUP_DIR"
 LOG_FILE="$LOG_DIR/rebuild_$(date +%Y%m%d_%H%M%S).log"
@@ -52,10 +54,37 @@ fi
 
 cd "$PROJECT_DIR"
 
-# Force Xcode to request a fresh profile from Apple instead of reusing a
-# locally cached one that is still (barely) valid at build time but expires
-# before the next scheduled rebuild.
-rm -f ~/Library/Developer/Xcode/UserData/Provisioning\ Profiles/*.mobileprovision
+# Only force a fresh profile fetch from Apple when the cached one for this
+# app is actually close to expiring. Deleting it unconditionally on every
+# run (the previous approach) had two side effects: it required a fresh
+# "Trust This Developer" tap on every single successful rebuild instead of
+# only when the profile genuinely renewed, and it made every rebuild
+# depend on Xcode's account session being valid at that exact moment —
+# when that session was flaky (see "No Accounts" failures in the logs),
+# the build failed outright instead of falling back to the still-valid
+# cached profile.
+NEEDS_FRESH_PROFILE=true
+for f in "$PROFILE_DIR"/*.mobileprovision; do
+  [[ -e "$f" ]] || continue
+  APP_ID=$(security cms -D -i "$f" 2>/dev/null | plutil -extract Entitlements.application-identifier raw -o - - 2>/dev/null || true)
+  [[ "$APP_ID" == *".$BUNDLE_ID" ]] || continue
+
+  EXPIRATION=$(security cms -D -i "$f" 2>/dev/null | plutil -extract ExpirationDate raw -o - - 2>/dev/null || true)
+  EXPIRATION_EPOCH=$(date -j -f "%Y-%m-%dT%H:%M:%SZ" "$EXPIRATION" +%s 2>/dev/null || echo 0)
+  REMAINING_DAYS=$(( (EXPIRATION_EPOCH - $(date +%s)) / 86400 ))
+
+  if (( REMAINING_DAYS > PROFILE_REFRESH_THRESHOLD_DAYS )); then
+    NEEDS_FRESH_PROFILE=false
+    echo "Cached profile $f still has $REMAINING_DAYS day(s) left. Reusing it." >> "$LOG_FILE"
+  else
+    echo "Cached profile $f has $REMAINING_DAYS day(s) left (<= $PROFILE_REFRESH_THRESHOLD_DAYS). Removing to force renewal." >> "$LOG_FILE"
+    rm -f "$f"
+  fi
+done
+
+if $NEEDS_FRESH_PROFILE; then
+  echo "No usable cached profile found; xcodebuild will request one." >> "$LOG_FILE"
+fi
 
 xcodebuild \
   -project WorkoutLog.xcodeproj \
