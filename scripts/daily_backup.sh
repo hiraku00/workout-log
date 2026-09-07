@@ -1,8 +1,12 @@
 #!/bin/bash
 # Pulls the app's auto-exported JSON (Documents/workoutlog_backup.json) off
-# the device daily, independent of the 5-day rebuild cycle. Keeps the
-# "how much data could I lose" window to at most ~1 day instead of ~5.
-# Run daily via LaunchAgent com.hiraku.workoutlog.dailybackup.plist.
+# the device, independent of the 5-day rebuild cycle. Run every 30 minutes
+# via LaunchAgent com.hiraku.workoutlog.dailybackup.plist (StartInterval) —
+# not a single fixed time of day, since betting on the phone being unlocked
+# and reachable at one exact moment is unreliable. Most runs are a no-op
+# either because a backup already succeeded today, or because the device
+# isn't reachable; whichever run happens to be the first to catch the phone
+# connected on a given day does the actual pull, and the rest skip.
 
 set -euo pipefail
 
@@ -19,6 +23,12 @@ echo "=== $(date) : daily backup check ===" >> "$LOG_FILE"
 
 # shellcheck source=lib_status.sh
 source "$SCRIPT_DIR/lib_status.sh"
+
+# Already got today's backup? Nothing left to do until tomorrow.
+if ls "$BACKUP_DIR"/backup_"$(date +%Y%m%d)"_*.json > /dev/null 2>&1; then
+  echo "Already backed up today. Skipping." >> "$LOG_FILE"
+  exit 0
+fi
 
 DEVICE_LINE=$(xcrun devicectl list devices 2>>"$LOG_FILE" | grep "$DEVICE_ID" || true)
 if [[ -z "$DEVICE_LINE" ]] || echo "$DEVICE_LINE" | grep -qE "unavailable|shutdown"; then

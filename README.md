@@ -51,7 +51,7 @@ xcodebuild \
 
 無料のApple ID（Personal Team）で実機ビルドする場合、provisioning profileの有効期限が7日間のため、期限切れでアプリが起動できなくなることがあります。[scripts/rebuild_and_install.sh](scripts/rebuild_and_install.sh)は、実機が接続されている（USBまたは同一ネットワーク上のWi-Fi）ときに再ビルド・再インストールしてこれを防ぐスクリプトです。
 
-`launchd`のLaunchAgentから毎朝呼び出し、スクリプト内部で前回成功から5日経過しているかを判定して実際のビルドを間引く想定です（`REBUILD_INTERVAL_DAYS`で調整可能）。`DEVICE_ID`は環境依存のため、利用する場合は`xcrun devicectl list devices`で確認した自分の端末のIdentifierに書き換えてください。LaunchAgentのplist自体はリポジトリ管理外（`~/Library/LaunchAgents/`配下）です。
+`launchd`のLaunchAgentから**30分おき**に呼び出されます。固定の時刻に1回だけ実行する方式だと、その瞬間に端末がロックされている/未接続だと丸ごと失敗するため、代わりに短い間隔で繰り返しチェックし、スクリプト内部で前回成功から5日経過しているかを判定して実際のビルドを間引きます（`REBUILD_INTERVAL_DAYS`で調整可能）。5日未満の間はすべての実行が即座に終了するため負荷はほぼゼロで、5日経過後は端末が実際に繋がる（＝ロック解除された）タイミングを捉えるまで30分おきにリトライし続けます。`DEVICE_ID`は環境依存のため、利用する場合は`xcrun devicectl list devices`で確認した自分の端末のIdentifierに書き換えてください。LaunchAgentのplist自体はリポジトリ管理外（`~/Library/LaunchAgents/`配下）です。
 
 このスクリプトは**アプリのアンインストールを一切行いません**。`devicectl device install app`によるアップグレードインストールのみを行うため、端末内のSwiftDataは保持されます（アンインストールするとアプリのデータ領域ごと削除されるため、絶対に自動化フローへ組み込まないでください）。
 
@@ -63,7 +63,7 @@ provisioning profileは**残り有効期限が`PROFILE_REFRESH_THRESHOLD_DAYS`�
 
 Mac側では[scripts/daily_backup.sh](scripts/daily_backup.sh)が、このJSONファイルだけを`devicectl device copy from`（`appDataContainer`ドメイン指定）で`~/Library/Application Support/WorkoutLogBackups/`へ取得し、直近30世代を保持します。これはFinder/iTunesが行うような端末全体のバックアップとは異なり、**このアプリのデータのみ**を対象にした軽量なコピーです。
 
-`daily_backup.sh`は`com.hiraku.workoutlog.dailybackup.plist`（LaunchAgent）から毎晩21時に単独で実行され、5日おきの再ビルドとは独立してMac側の控えを最新化します（データ消失時に失われうる範囲を最大5日から最大1日に縮小）。`scripts/rebuild_and_install.sh`もビルド前に同じ処理を呼び出すため、重複して実装はしていません。
+`daily_backup.sh`は`com.hiraku.workoutlog.dailybackup.plist`（LaunchAgent）から**30分おき**に単独で実行され、5日おきの再ビルドとは独立してMac側の控えを最新化します。ただし**その日すでに1回成功していれば即座にスキップ**するため、実際に端末へアクセスするのは1日1回だけです（1日のうちどこかのタイミングで端末が繋がっていれば拾える、というのが狙いで、繋がりっぱなしでもファイルが無駄に増殖しません）。データ消失時に失われうる範囲は最大1日程度に収まります。`scripts/rebuild_and_install.sh`もビルド前に同じ処理を呼び出すため、重複して実装はしていません。
 
 ### アプリデータの自動復元
 

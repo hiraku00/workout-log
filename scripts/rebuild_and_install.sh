@@ -1,8 +1,12 @@
 #!/bin/bash
 # Rebuilds WorkoutLog and reinstalls it on the physical iPhone so the
 # free-account provisioning profile (7-day validity) never expires.
-# Run daily at 7am via LaunchAgent com.hiraku.workoutlog.rebuild.plist,
-# but only actually builds once every REBUILD_INTERVAL_DAYS days.
+# Run every 30 minutes via LaunchAgent com.hiraku.workoutlog.rebuild.plist
+# (StartInterval, not a fixed time of day — betting on the phone being
+# unlocked and reachable at one exact moment is unreliable). The interval
+# check below makes every run an instant no-op except on days a rebuild is
+# actually due, and on those days it keeps retrying every 30 minutes until
+# the device happens to be reachable, instead of getting only one shot.
 
 set -euo pipefail
 
