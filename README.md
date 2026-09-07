@@ -55,6 +55,8 @@ xcodebuild \
 
 このスクリプトは**アプリのアンインストールを一切行いません**。`devicectl device install app`によるアップグレードインストールのみを行うため、端末内のSwiftDataは保持されます（アンインストールするとアプリのデータ領域ごと削除されるため、絶対に自動化フローへ組み込まないでください）。
 
+provisioning profileは**残り有効期限が`PROFILE_REFRESH_THRESHOLD_DAYS`（既定2日）以下の場合のみ**ローカルキャッシュを削除して新規発行させます。まだ十分な期限が残っていれば同じprofileを再利用するため、同じキャッシュが使われる限りOS側の「デベロッパを信頼」も再度必要になりません（新しいprofileが発行された時だけ、端末で信頼をやり直す必要があります）。また、Xcodeのアカウントセッションが一時的に不調でも、キャッシュがまだ有効な間はビルドがそれに依存せず成功します。
+
 ### アプリデータの自動バックアップ
 
 アプリは`scenePhase`が`.background`になるたび（ホーム画面に戻るたび）、全記録を`Documents/workoutlog_backup.json`へ自動でJSON書き出しします（[DataBackup.swift](WorkoutLog/Utilities/DataBackup.swift)）。ユーザー操作は不要です。
