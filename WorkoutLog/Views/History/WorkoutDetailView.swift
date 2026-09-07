@@ -109,7 +109,7 @@ struct WorkoutDetailView: View {
         Button { showingCopyConfirmation = true } label: {
             HStack(spacing: 8) {
                 Image(systemName: "arrow.counterclockwise")
-                Text("今日のローテーションに使う")
+                Text("コピーして開始")
                     .fontWeight(.bold)
             }
             .font(AppFont.headline)
