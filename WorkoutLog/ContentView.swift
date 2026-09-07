@@ -33,6 +33,13 @@ struct ContentView: View {
                     Label("設定", systemImage: selectedTab == 3 ? "gearshape.fill" : "gearshape")
                 }
                 .tag(3)
+
+            // 自動リビルドタブ
+            SyncStatusView()
+                .tabItem {
+                    Label("同期", systemImage: selectedTab == 4 ? "arrow.triangle.2.circlepath.circle.fill" : "arrow.triangle.2.circlepath.circle")
+                }
+                .tag(4)
         }
         .tint(AppDesign.accent)
     }

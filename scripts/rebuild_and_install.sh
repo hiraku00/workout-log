@@ -19,10 +19,15 @@ BACKUP_DIR="$HOME/Library/Application Support/WorkoutLogBackups"
 PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 PROFILE_REFRESH_THRESHOLD_DAYS=2
 
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
 mkdir -p "$LOG_DIR" "$BACKUP_DIR"
 LOG_FILE="$LOG_DIR/rebuild_$(date +%Y%m%d_%H%M%S).log"
 
 echo "=== $(date) : daily check ===" >> "$LOG_FILE"
+
+# shellcheck source=lib_status.sh
+source "$SCRIPT_DIR/lib_status.sh"
 
 # Skip unless REBUILD_INTERVAL_DAYS have passed since the last successful run.
 if [[ -f "$STATE_FILE" ]]; then
@@ -86,6 +91,10 @@ if $NEEDS_FRESH_PROFILE; then
   echo "No usable cached profile found; xcodebuild will request one." >> "$LOG_FILE"
 fi
 
+# Wrapped with set +e/-e so a build or install failure can still push a
+# status update to the device (visible on the app's home screen) before
+# this script exits, instead of set -e killing it silently mid-way.
+set +e
 xcodebuild \
   -project WorkoutLog.xcodeproj \
   -scheme "$SCHEME" \
@@ -93,8 +102,31 @@ xcodebuild \
   -destination "id=$DEVICE_ID" \
   -allowProvisioningUpdates \
   build >> "$LOG_FILE" 2>&1
+BUILD_EXIT=$?
+set -e
 
+if [[ $BUILD_EXIT -ne 0 ]]; then
+  update_and_push_status '.lastRebuildAttemptAt = $now | .lastRebuildResult = "build_failed" | .rebuildIntervalDays = $days' \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson days "$REBUILD_INTERVAL_DAYS"
+  echo "Build failed. Exiting without updating STATE_FILE." >> "$LOG_FILE"
+  exit 1
+fi
+
+set +e
 xcrun devicectl device install app --device "$DEVICE_ID" "$APP_PATH" >> "$LOG_FILE" 2>&1
+INSTALL_EXIT=$?
+set -e
+
+if [[ $INSTALL_EXIT -ne 0 ]]; then
+  update_and_push_status '.lastRebuildAttemptAt = $now | .lastRebuildResult = "install_failed" | .rebuildIntervalDays = $days' \
+    --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson days "$REBUILD_INTERVAL_DAYS"
+  echo "Install failed. Exiting without updating STATE_FILE." >> "$LOG_FILE"
+  exit 1
+fi
+
+update_and_push_status \
+  '.lastRebuildAttemptAt = $now | .lastRebuildSuccessAt = $now | .lastRebuildResult = "success" | .rebuildIntervalDays = $days' \
+  --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)" --argjson days "$REBUILD_INTERVAL_DAYS"
 
 # Push the most recent Mac-side backup back onto the device as a "pending
 # restore" file. The app merges it in by ID on next launch and skips any

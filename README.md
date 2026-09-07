@@ -71,6 +71,10 @@ Mac側では[scripts/daily_backup.sh](scripts/daily_backup.sh)が、このJSON�
 
 データコンテナが健在な通常のアップグレードでは全レコードが既に存在するため実質何もしません。provisioning profileの完全な失効や再インストールでデータコンテナが失われた場合のみ、直近のバックアップから自動的に復元されます。取り込み後、復元用ファイルは削除されます。
 
+### 自動化状態の確認画面（アプリ内）
+
+アプリの「同期」タブ（[SyncStatusView](WorkoutLog/Views/Sync/SyncStatusView.swift)）で、証明書の有効期限・最終バックアップ日時・最終リビルド日時・次回リビルド予定日を確認できます。証明書の有効期限はこの端末のprofileから直接読み取り（Mac不要）、バックアップ・リビルドの成否はMac側スクリプトが`devicectl device copy to`で送り込む`Documents/workoutlog_status.json`（[DeviceSyncStatus](WorkoutLog/Utilities/DeviceSyncStatus.swift)）から読み取ります。
+
 ## データ保存
 
 ユーザーの入力データはSwiftDataにより端末内のアプリ専用領域へ保存されます。Gitリポジトリや外部サーバーには保存されません（自動バックアップされたJSONのみ、上記の通りローカルMacの`~/Library/Application Support/WorkoutLogBackups/`に保存されます）。
