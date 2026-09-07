@@ -565,6 +565,12 @@ struct DayWorkoutContent: View {
             if let workout {
                 headerSummarySection(for: workout)
 
+                // 過去日を見ている時は、下までスクロールしなくてもすぐコピーできるよう
+                // 記録一覧より前に置く。
+                if !Calendar.current.isDateInToday(targetDate), !workout.sortedExercises.isEmpty {
+                    copyToTodayButton(workout)
+                }
+
                 if workout.sortedExercises.isEmpty {
                     emptyExercisePlaceholder
                 } else {
@@ -574,10 +580,6 @@ struct DayWorkoutContent: View {
                 }
 
                 addExerciseButton
-
-                if !Calendar.current.isDateInToday(targetDate), !workout.sortedExercises.isEmpty {
-                    copyToTodayButton(workout)
-                }
 
                 Button("この日の記録をすべて削除", role: .destructive) {
                     showingDeleteConfirmation = true
@@ -782,7 +784,7 @@ struct DayWorkoutContent: View {
 
     private func copyToTodayButton(_ workout: Workout) -> some View {
         Button { showingCopyConfirmation = true } label: {
-            Label("今日にコピーして開始", systemImage: "arrow.counterclockwise")
+            Label("コピーして開始", systemImage: "arrow.counterclockwise")
                 .frame(maxWidth: .infinity)
         }
         .buttonStyle(AppPrimaryButtonStyle())
