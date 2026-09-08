@@ -55,7 +55,6 @@ targets:
         LSApplicationQueriesSchemes:
           - brave
         NSAlarmKitUsageDescription: 休憩タイマー終了時に、別のアプリを使用中でもアラームでお知らせします。
-        NSFaceIDUsageDescription: Face IDを使用してアプリへのアクセスを保護します
   WorkoutLogTests:
     type: bundle.unit-test
     platform: iOS

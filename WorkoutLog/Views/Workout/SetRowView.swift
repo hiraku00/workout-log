@@ -11,11 +11,18 @@ struct SetRowView: View {
     let onCopyNote: (() -> Void)?
     let onCompleted: () -> Void
 
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
+    @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @State private var showingRepsPicker = false
 
     private var oneRM: Double {
-        exerciseSet.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: exerciseSet.weight, reps: exerciseSet.reps)
+        exerciseSet.isBodyweight
+            ? 0
+            : WorkoutViewModel.estimateOneRM(
+                weight: exerciseSet.weight,
+                reps: exerciseSet.reps,
+                formula: OneRMFormula(rawValue: oneRMFormula) ?? .epley
+            )
     }
 
     var body: some View {
@@ -162,7 +169,7 @@ struct SetRowView: View {
                     WeightTextField(exerciseSet: exerciseSet, weightUnit: weightUnit)
                         .layoutPriority(1)
 
-                    Text(weightUnit)
+                    Text(weightUnit.rawValue)
                         .font(AppFont.caption2)
                         .foregroundStyle(.secondary)
                         .fixedSize()
@@ -301,7 +308,7 @@ struct SetRowColumnHeader: View {
 /// 文字列を保持して小数点入力を確実に扱う重量フィールド。
 private struct WeightTextField: View {
     let exerciseSet: ExerciseSet
-    let weightUnit: String
+    let weightUnit: WeightUnit
 
     @State private var text = ""
     @State private var lastSyncedWeight: Double?
@@ -346,13 +353,13 @@ private struct WeightTextField: View {
         guard normalized.filter({ $0 == "." }).count <= 1,
               let value = Double(normalized),
               value >= 0 else { return }
-        exerciseSet.weight = weightUnit == "lbs" ? value / 2.20462 : value
+        exerciseSet.weight = weightUnit.toKg(value)
         lastSyncedWeight = exerciseSet.weight
     }
 
     private func refreshText() {
         guard !exerciseSet.isBodyweight else { text = ""; return }
-        let value = weightUnit == "lbs" ? exerciseSet.weight * 2.20462 : exerciseSet.weight
+        let value = weightUnit.fromKg(exerciseSet.weight)
         text = Self.formatted(value)
     }
 

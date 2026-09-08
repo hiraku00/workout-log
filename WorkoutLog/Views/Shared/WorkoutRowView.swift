@@ -3,7 +3,7 @@ import SwiftUI
 /// ワークアウト一覧の各行コンポーネント（HomeView・HistoryViewで共用）
 struct WorkoutRowView: View {
     let workout: Workout
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
 
     var body: some View {
         HStack(spacing: 16) {
@@ -60,7 +60,7 @@ struct WorkoutRowView: View {
                         .font(AppFont.subheadline)
                         .fontWeight(.semibold)
                         .foregroundStyle(.primary)
-                    Text(weightUnit)
+                    Text(weightUnit.rawValue)
                         .font(AppFont.caption2)
                         .foregroundStyle(.secondary)
                 }
@@ -94,14 +94,6 @@ struct WorkoutRowView: View {
     }
 
     private var formattedVolume: String {
-        let volume: Double
-        if weightUnit == "lbs" {
-            volume = workout.totalVolume * 2.20462
-        } else {
-            volume = workout.totalVolume
-        }
-        return volume >= 1000
-            ? String(format: "%.1fk", volume / 1000)
-            : String(format: "%.0f", volume)
+        workout.totalVolume.formattedVolume(unit: weightUnit)
     }
 }

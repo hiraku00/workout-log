@@ -28,7 +28,8 @@ enum WorkoutInsights {
     static func homeSummary(
         workouts: [Workout],
         now: Date = Date(),
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        oneRMFormula: OneRMFormula = .epley
     ) -> HomeWorkoutSummary {
         let today = calendar.startOfDay(for: now)
         let meaningfulWorkouts = workouts
@@ -54,7 +55,7 @@ enum WorkoutInsights {
         let thisWeekWorkoutCount = completedWorkouts.filter { $0.date >= startOfWeek }.count
 
         let recentBestUpdates = latestCompletedWorkout.map {
-            Self.personalBestUpdates(for: $0, comparedTo: completedWorkouts, calendar: calendar)
+            Self.personalBestUpdates(for: $0, comparedTo: completedWorkouts, calendar: calendar, oneRMFormula: oneRMFormula)
         } ?? []
 
         let formatter = DateFormatter()
@@ -75,7 +76,8 @@ enum WorkoutInsights {
     static func personalBestUpdates(
         for workout: Workout,
         comparedTo workouts: [Workout],
-        calendar: Calendar = .current
+        calendar: Calendar = .current,
+        oneRMFormula: OneRMFormula = .epley
     ) -> [PersonalBestUpdate] {
         let targetDay = calendar.startOfDay(for: workout.date)
         let previousExercises = workouts
@@ -90,8 +92,8 @@ enum WorkoutInsights {
             guard let template = exercise.exerciseTemplate else { return nil }
             let history = previousExercises.filter { $0.exerciseTemplate?.representsSameExercise(as: template) == true }
 
-            if let current = bestEstimatedOneRM(in: exercise) {
-                guard let previous = history.compactMap(bestEstimatedOneRM).max(),
+            if let current = bestEstimatedOneRM(in: exercise, formula: oneRMFormula) {
+                guard let previous = history.compactMap({ bestEstimatedOneRM(in: $0, formula: oneRMFormula) }).max(),
                       current > previous + 0.01 else { return nil }
                 return PersonalBestUpdate(
                     exerciseID: template.id,
@@ -116,10 +118,10 @@ enum WorkoutInsights {
         .sorted { $0.exerciseName.localizedStandardCompare($1.exerciseName) == .orderedAscending }
     }
 
-    private static func bestEstimatedOneRM(in exercise: WorkoutExercise) -> Double? {
+    private static func bestEstimatedOneRM(in exercise: WorkoutExercise, formula: OneRMFormula) -> Double? {
         exercise.sets
             .filter { $0.isCompleted && !$0.isBodyweight && $0.weight > 0 && $0.reps > 0 }
-            .map { WorkoutViewModel.estimateOneRM(weight: $0.weight, reps: $0.reps) }
+            .map { WorkoutViewModel.estimateOneRM(weight: $0.weight, reps: $0.reps, formula: formula) }
             .max()
     }
 

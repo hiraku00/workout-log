@@ -229,7 +229,7 @@ struct LibraryExerciseRow: View {
     let template: ExerciseTemplate
     let personalRecord: Double
     let bestReps: Int
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
 
     var body: some View {
         HStack(spacing: 12) {
@@ -279,8 +279,7 @@ struct LibraryExerciseRow: View {
                 }
             } else if personalRecord > 0 {
                 VStack(alignment: .trailing, spacing: 1) {
-                    let display = weightUnit == "lbs" ? personalRecord * 2.20462 : personalRecord
-                    Text(display.weightString(unit: weightUnit))
+                    Text(personalRecord.setWeightDisplay(unit: weightUnit))
                         .font(AppFont.subheadline)
                         .fontWeight(.bold)
                         .foregroundStyle(.primary)
@@ -311,7 +310,7 @@ struct LibraryExerciseRow: View {
 struct ExerciseHistoryDetailView: View {
     let template: ExerciseTemplate
     let workouts: [Workout]
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
 
     private var records: [(Workout, WorkoutExercise)] {
         workouts.compactMap { workout in

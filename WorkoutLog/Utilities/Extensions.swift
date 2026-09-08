@@ -85,6 +85,28 @@ extension TimeInterval {
     }
 }
 
+// MARK: - 重量単位
+/// 表示用の重量単位。`AppStorage`の保存値と一致するRawValueを持つため、
+/// `@AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg`のように
+/// 文字列を経由せず直接使える。kg↔lbs換算をここへ一本化し、
+/// 各画面に`* 2.20462`が個別にベタ書きされるのを防ぐ。
+enum WeightUnit: String, CaseIterable, Equatable {
+    case kg
+    case lbs
+
+    private static let kgToLbsFactor = 2.20462
+
+    /// kg基準で保存されている値を、この単位での表示用の値に変換する。
+    func fromKg(_ kgValue: Double) -> Double {
+        self == .lbs ? kgValue * Self.kgToLbsFactor : kgValue
+    }
+
+    /// この単位で入力された値を、保存用のkg基準の値に変換する。
+    func toKg(_ displayValue: Double) -> Double {
+        self == .lbs ? displayValue / Self.kgToLbsFactor : displayValue
+    }
+}
+
 // MARK: - Double拡張
 extension Double {
     /// 重量の表示文字列（小数点が不要な場合は整数表示）
@@ -97,28 +119,19 @@ extension Double {
         return unit.isEmpty ? String(format: "%.1f", self) : String(format: "%.1f %@", self, unit)
     }
 
-    /// セット重量の表示（自重・単位変換対応）
-    func setWeightDisplay(unit: String) -> String {
+    /// セット重量の表示（自重・単位変換対応）。selfはkg基準で保存された値。
+    func setWeightDisplay(unit: WeightUnit) -> String {
         if self == ExerciseSet.bodyweightValue { return "自重" }
-        let display = unit == "lbs" ? self * 2.20462 : self
-        return display.weightString(unit: unit)
+        return unit.fromKg(self).weightString(unit: unit.rawValue)
     }
-}
 
-// MARK: - Color拡張
-extension Color {
-    /// カテゴリ名からカラーを取得
-    static func categoryColor(_ category: String) -> Color {
-        switch category {
-        case "胸":   return .blue
-        case "背中": return .indigo
-        case "脚":   return .green
-        case "肩":   return .orange
-        case "腕":   return .purple
-        case "体幹": return .red
-        case "有酸素": return .pink
-        default:     return .secondary
-        }
+    /// ボリューム等の大きい数値を「1000以上はk表記」で整形する（単位変換込み）。
+    /// selfはkg基準の値。Settings／履歴詳細／日別記録画面で重複していたロジックをここへ統一。
+    func formattedVolume(unit: WeightUnit) -> String {
+        let value = unit.fromKg(self)
+        return value >= 1000
+            ? String(format: "%.1fk", value / 1000)
+            : String(format: "%.0f", value)
     }
 }
 
@@ -340,28 +353,6 @@ struct AppPressableStyle: ButtonStyle {
             .scaleEffect(reduceMotion ? 1 : (configuration.isPressed ? 0.985 : 1))
             .opacity(configuration.isPressed ? 0.72 : 1)
             .animation(reduceMotion ? .linear(duration: 0.08) : .spring(response: 0.2, dampingFraction: 1), value: configuration.isPressed)
-    }
-}
-
-struct AppSectionHeader: View {
-    let title: String
-    var actionTitle: String? = nil
-    var action: (() -> Void)? = nil
-
-    var body: some View {
-        HStack(alignment: .firstTextBaseline) {
-            Text(title)
-                .font(AppFont.title3)
-                .fontWeight(.semibold)
-                .tracking(-0.2)
-            Spacer()
-            if let actionTitle, let action {
-                Button(actionTitle, action: action)
-                    .font(AppFont.subheadline)
-                    .fontWeight(.semibold)
-            }
-        }
-        .frame(minHeight: 32)
     }
 }
 

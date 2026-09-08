@@ -173,18 +173,6 @@ final class WorkoutViewModel {
         newSet.comment = lastSet?.comment ?? ""
         newSet.workoutExercise = workoutExercise
         context.insert(newSet)
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
-    }
-
-    /// セットの値を前のセットからコピーする
-    func copyFromPreviousSet(_ set: ExerciseSet, to workoutExercise: WorkoutExercise, context: ModelContext) {
-        guard let setIndex = workoutExercise.sortedSets.firstIndex(where: { $0.id == set.id }),
-              setIndex > 0 else { return }
-
-        let previousSet = workoutExercise.sortedSets[setIndex - 1]
-        set.weight = previousSet.weight
-        set.reps = previousSet.reps
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     /// セットを削除する
@@ -214,7 +202,6 @@ final class WorkoutViewModel {
         for (index, item) in exercises.enumerated() {
             item.order = index
         }
-        UIImpactFeedbackGenerator(style: .light).impactOccurred()
     }
 
     // MARK: - コピー機能
@@ -246,12 +233,14 @@ final class WorkoutViewModel {
 
     // MARK: - ヘルパー
 
-    /// 設定中の方式で推定1RMを計算する。
-    static func estimateOneRM(weight: Double, reps: Int) -> Double {
+    /// 指定した方式で推定1RMを計算する純粋関数。
+    ///
+    /// 以前はここで`UserDefaults`から現在の方式を直接読んでいたが、`ForEach`内の
+    /// 描画のたびに呼ばれる箇所が複数あり無駄が多く、テストもグローバル状態に
+    /// 依存してしまっていた。呼び出し側が`@AppStorage("oneRMFormula")`から
+    /// 読んだ値を明示的に渡す設計にしている。
+    static func estimateOneRM(weight: Double, reps: Int, formula: OneRMFormula) -> Double {
         guard weight > 0, reps > 0 else { return 0 }
-        let formula = OneRMFormula(
-            rawValue: UserDefaults.standard.string(forKey: "oneRMFormula") ?? ""
-        ) ?? .epley
 
         switch formula {
         case .epley:

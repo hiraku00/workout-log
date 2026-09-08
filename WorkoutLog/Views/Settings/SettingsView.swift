@@ -3,7 +3,7 @@ import SwiftData
 
 /// 設定画面
 struct SettingsView: View {
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
     @AppStorage("appearanceMode") private var appearanceMode = "system"
     @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @AppStorage("defaultSetCount") private var defaultSetCount = 3
@@ -35,8 +35,8 @@ struct SettingsView: View {
                 // 単位設定
                 Section("単位") {
                     Picker("重量の単位", selection: $weightUnit) {
-                        Text("kg").tag("kg")
-                        Text("lbs").tag("lbs")
+                        Text("kg").tag(WeightUnit.kg)
+                        Text("lbs").tag(WeightUnit.lbs)
                     }
                     .pickerStyle(.segmented)
                     .padding(.vertical, 4)
@@ -121,15 +121,14 @@ struct SettingsView: View {
     // MARK: - 統計行
 
     private var statsRow: some View {
-        let vol = weightUnit == "lbs" ? totalVolume * 2.20462 : totalVolume
-        return HStack(spacing: 0) {
+        HStack(spacing: 0) {
             settingsMetric(value: "\(totalWorkouts)", label: "トレーニング")
             Divider().frame(height: 38)
             settingsMetric(value: "\(totalSets)", label: "セット")
             Divider().frame(height: 38)
             settingsMetric(
-                value: vol >= 1000 ? String(format: "%.1fk", vol / 1000) : "\(Int(vol))",
-                label: "ボリューム \(weightUnit)"
+                value: totalVolume.formattedVolume(unit: weightUnit),
+                label: "ボリューム \(weightUnit.rawValue)"
             )
         }
         .padding(18)

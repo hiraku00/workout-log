@@ -13,7 +13,7 @@ struct WorkoutDetailView: View {
     @State private var showingCopyConfirmation = false
     @State private var showingCopyDatePicker = false
     @State private var copyDestinationDate = Date()
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
 
     var body: some View {
         ScrollView {
@@ -160,10 +160,7 @@ struct WorkoutDetailView: View {
     }
 
     private var formattedVolume: String {
-        let vol = weightUnit == "lbs" ? workout.totalVolume * 2.20462 : workout.totalVolume
-        return vol >= 1000
-            ? String(format: "%.1fk\(weightUnit)", vol / 1000)
-            : "\(Int(vol))\(weightUnit)"
+        workout.totalVolume.formattedVolume(unit: weightUnit) + weightUnit.rawValue
     }
 }
 
@@ -191,7 +188,7 @@ struct StatItem: View {
 // MARK: - 種目サマリーカード
 struct ExerciseSummaryCard: View {
     let workoutExercise: WorkoutExercise
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
 
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
