@@ -43,6 +43,7 @@ enum ExercisePresets {
     static let arms: [ExercisePreset] = [
         ExercisePreset(name: "ダンベルカール", category: "腕", muscleGroup: "上腕二頭筋"),
         ExercisePreset(name: "フレンチプレス", category: "腕", muscleGroup: "上腕三頭筋"),
+        ExercisePreset(name: "ダンベルスカルクラッシャー", category: "腕", muscleGroup: "上腕三頭筋"),
     ]
 
     // MARK: - 体幹（Core）

@@ -60,7 +60,6 @@ final class WorkoutLogAppDelegate: NSObject, UIApplicationDelegate, UNUserNotifi
 /// アプリ起動時の初期化を担当するビュー
 struct AppRootView: View {
     @Environment(\.modelContext) private var modelContext
-    @Query private var exerciseTemplates: [ExerciseTemplate]
     @Query(filter: #Predicate<Workout> { $0.isActive }) private var activeWorkouts: [Workout]
     @AppStorage("appearanceMode") private var appearanceMode = "system"
     @State private var viewModel = WorkoutViewModel()
@@ -90,27 +89,10 @@ struct AppRootView: View {
         }
     }
 
-    /// 内蔵カタログとデータベースを同期する。廃止種目は履歴保護のためアーカイブする。
+    /// 内蔵カタログとデータベースを同期する（実処理は`ExerciseTemplateSeeder`）。
     private func seedExerciseTemplatesIfNeeded() {
-        for preset in ExercisePresets.all {
-            if let template = exerciseTemplates.first(where: { !$0.isCustom && $0.name == preset.name }) {
-                template.category = preset.category
-                template.muscleGroup = preset.muscleGroup
-                template.isArchived = false
-            } else {
-                modelContext.insert(ExerciseTemplate(
-                    name: preset.name,
-                    category: preset.category,
-                    muscleGroup: preset.muscleGroup,
-                    isCustom: false
-                ))
-            }
-        }
-
-        let activePresetNames = Set(ExercisePresets.all.map(\.name))
-        for template in exerciseTemplates where !template.isCustom && !activePresetNames.contains(template.name) {
-            template.isArchived = true
-        }
+        let existingTemplates = (try? modelContext.fetch(FetchDescriptor<ExerciseTemplate>())) ?? []
+        ExerciseTemplateSeeder.sync(existingTemplates: existingTemplates, modelContext: modelContext)
 
         do {
             try modelContext.save()

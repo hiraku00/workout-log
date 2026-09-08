@@ -106,4 +106,34 @@ final class DataBackupTests: XCTestCase {
         let workouts = try context.fetch(FetchDescriptor<Workout>())
         XCTAssertTrue(workouts.isEmpty)
     }
+
+    /// Mac側の自動リビルドが古い世代のバックアップを復元用ファイルとして送り込んできても、
+    /// ユーザーが端末上で明示的に削除した記録は復活しない（IDが未存在という理由だけでは復元しない）。
+    func testRestoreSkipsWorkoutsThatWereDeletedLocally() throws {
+        let context = try makeContext()
+        let deletedID = UUID()
+        DeletedWorkoutTombstones.record(deletedID)
+
+        let backup = WorkoutBackup(
+            exportedAt: .now,
+            exerciseTemplates: [],
+            workouts: [
+                .init(
+                    id: deletedID,
+                    date: .now,
+                    name: "削除済みのはずの記録",
+                    duration: 0,
+                    notes: "",
+                    isActive: false,
+                    exercises: []
+                ),
+            ]
+        )
+        _ = try writeRestoreFile(backup)
+
+        DataBackupImporter.restoreIfNeeded(modelContext: context)
+
+        let workouts = try context.fetch(FetchDescriptor<Workout>())
+        XCTAssertTrue(workouts.isEmpty)
+    }
 }

@@ -8,6 +8,7 @@ final class ExercisePresetsTests: XCTestCase {
             Set([
                 "ダンベルカール",
                 "フレンチプレス",
+                "ダンベルスカルクラッシャー",
                 "ワンハンドサイドレイズ",
                 "ダンベルショルダープレス",
                 "腹筋ローラー",
@@ -23,6 +24,6 @@ final class ExercisePresetsTests: XCTestCase {
                 "インクラインダンベルプレス",
             ])
         )
-        XCTAssertEqual(ExercisePresets.all.count, 15)
+        XCTAssertEqual(ExercisePresets.all.count, 16)
     }
 }
