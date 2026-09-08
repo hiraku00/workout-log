@@ -71,6 +71,8 @@ Mac側では[scripts/daily_backup.sh](scripts/daily_backup.sh)が、このJSON�
 
 データコンテナが健在な通常のアップグレードでは全レコードが既に存在するため実質何もしません。provisioning profileの完全な失効や再インストールでデータコンテナが失われた場合のみ、直近のバックアップから自動的に復元されます。取り込み後、復元用ファイルは削除されます。
 
+アプリ内でワークアウトを削除すると、そのIDを端末内に「削除済み」として記録します（[DeletedWorkoutTombstones](WorkoutLog/Utilities/DeletedWorkoutTombstones.swift)）。Mac側のバックアップは最大30世代保持されているため、削除後に古い世代が復元用ファイルとして送り込まれる可能性がありますが、このIDが記録されている限り復元処理はその記録をスキップします。アンインストール等でデータコンテナごと失われた場合はこの記録も一緒に消えるため、正規の復元シナリオは従来通り機能します。削除操作の直後にはアプリ側の自動書き出し（`Documents/workoutlog_backup.json`）もその場で最新化し、Mac側の次回バックアップ取得が削除後の状態に早く追いつくようにしています。
+
 ### 自動化状態の確認画面（アプリ内）
 
 アプリの「同期」タブ（[SyncStatusView](WorkoutLog/Views/Sync/SyncStatusView.swift)）で、証明書の有効期限・最終バックアップ日時・最終リビルド日時・次回リビルド予定日を確認できます。証明書の有効期限はこの端末のprofileから直接読み取り（Mac不要）、バックアップ・リビルドの成否はMac側スクリプトが`devicectl device copy to`で送り込む`Documents/workoutlog_status.json`（[DeviceSyncStatus](WorkoutLog/Utilities/DeviceSyncStatus.swift)）から読み取ります。
@@ -90,7 +92,7 @@ Mac側では[scripts/daily_backup.sh](scripts/daily_backup.sh)が、このJSON�
 | 表示モード | AppStorage | システム / ライト / ダーク |
 | 推定1RM方式 | AppStorage | Epley式 / O’Conner式 |
 
-初回起動時、`ExercisePresets.swift`に定義された15種目をSwiftDataへ投入します。プリセットの元データはJSON等の外部ファイルではなく、Swiftコードで管理しています。手動追加したカスタム種目もプリセットと同じSwiftDataへ端末内データとして保存されます。以後は保存済みデータを使用するため、起動のたびに重複追加されることはありません。
+初回起動時、`ExercisePresets.swift`に定義された16種目をSwiftDataへ投入します（[ExerciseTemplateSeeder](WorkoutLog/Utilities/ExerciseTemplateSeeder.swift)）。プリセットの元データはJSON等の外部ファイルではなく、Swiftコードで管理しています。手動追加したカスタム種目もプリセットと同じSwiftDataへ端末内データとして保存されます。以後は保存済みデータを使用するため、起動のたびに重複追加されることはありません。同名のカスタム種目を先に追加していた場合は、削除して作り直すのではなくそのレコードを内蔵種目へ昇格させるため（IDは変わらない）、それまでの記録・ベスト更新（PR）は引き継がれます。
 
 現在はCloudKitやアカウント同期、エクスポート機能を実装していません。アプリを削除すると端末内データも失われる可能性があります。設定画面の「全データを削除」では、ワークアウト、ワークアウト内の種目、セット記録を削除します。
 
