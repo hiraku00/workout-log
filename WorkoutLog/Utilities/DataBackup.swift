@@ -147,7 +147,9 @@ enum DataBackupImporter {
             }
 
             let existingWorkoutIDs = Set(try modelContext.fetch(FetchDescriptor<Workout>()).map(\.id))
-            for workoutBackup in backup.workouts where !existingWorkoutIDs.contains(workoutBackup.id) {
+            for workoutBackup in backup.workouts
+                where !existingWorkoutIDs.contains(workoutBackup.id)
+                    && !DeletedWorkoutTombstones.contains(workoutBackup.id) {
                 let workout = Workout(date: workoutBackup.date, name: workoutBackup.name)
                 workout.id = workoutBackup.id
                 workout.duration = workoutBackup.duration

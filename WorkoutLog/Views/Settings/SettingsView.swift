@@ -160,9 +160,18 @@ struct SettingsView: View {
     /// 全データを削除する
     private func deleteAllData() {
         do {
+            // Mac側の自動バックアップ（最大30世代）が後から復元用ファイルとして
+            // 送り込まれても、削除した記録が復活しないようIDを記録しておく。
+            let deletedIDs = try modelContext.fetch(FetchDescriptor<Workout>()).map(\.id)
+            DeletedWorkoutTombstones.record(deletedIDs)
+
             try modelContext.delete(model: Workout.self)
             try modelContext.delete(model: WorkoutExercise.self)
             try modelContext.delete(model: ExerciseSet.self)
+
+            // 端末側の自動書き出しをこの場で最新化し、Mac側の次回バックアップ取得を
+            // 削除後の状態に早く追いつかせる。
+            DataBackupExporter.export(modelContext: modelContext)
         } catch {
             print("データ削除エラー: \(error)")
         }

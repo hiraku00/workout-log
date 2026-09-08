@@ -33,6 +33,10 @@ final class WorkoutViewModel {
     /// 現在ホームタブで開く日付（履歴カレンダーからの遷移用）
     var homeNavigationDate: Date?
 
+    /// 休憩タイマー。種目詳細画面の生死に関わらず1つだけ進行させるため、
+    /// Viewの`@State`ではなくここで一元管理する。
+    let restTimer = RestTimerController()
+
     /// 種目追加時に自動作成するセット数
     private var defaultSetCount: Int {
         let stored = UserDefaults.standard.integer(forKey: "defaultSetCount")
@@ -119,10 +123,16 @@ final class WorkoutViewModel {
 
     /// ワークアウトをキャンセルして削除する
     func cancelWorkout(_ workout: Workout, context: ModelContext) {
+        // Mac側の自動バックアップが古い状態を後から復元用ファイルとして
+        // 送り込んできても、この記録が生き返らないようにしておく。
+        DeletedWorkoutTombstones.record(workout.id)
         context.delete(workout)
         if activeWorkout?.id == workout.id {
             activeWorkout = nil
         }
+        // 端末側の自動書き出しをこの場で最新化し、Mac側の次回バックアップ取得を
+        // 削除後の状態に早く追いつかせる（バックグラウンド遷移を待たない）。
+        DataBackupExporter.export(modelContext: context)
     }
 
     /// ワークアウトをキャンセルして削除する（進行中ワークアウト用）
