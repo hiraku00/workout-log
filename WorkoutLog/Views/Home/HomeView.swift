@@ -12,6 +12,12 @@ struct HomeView: View {
 
     private let calendar = Calendar.current
 
+    /// ホーム画面が必要とする集計値を一度に計算する。
+    ///
+    /// 以前はこれを計算プロパティにしていたため、`body`内で`summary`を参照するたびに
+    /// （`activitySummary`・`bestUpdatesSection`・`todaySection`など複数箇所）
+    /// `allWorkouts`の再ソート・再集計が毎回走っていた。`body`の先頭で1回だけ計算し、
+    /// 各セクションへ値として渡すことで、1回の描画につき1回の計算に抑える。
     private var summary: HomeWorkoutSummary {
         WorkoutInsights.homeSummary(
             workouts: allWorkouts,
@@ -20,12 +26,8 @@ struct HomeView: View {
         )
     }
 
-    private var workoutDates: Set<String> {
-        summary.workoutDates
-    }
-
-    private var previousWorkoutValue: String {
-        guard let previousWorkout = summary.previousWorkout else { return "なし" }
+    private func previousWorkoutValue(for previousWorkout: Workout?) -> String {
+        guard let previousWorkout else { return "なし" }
         let previousDay = calendar.startOfDay(for: previousWorkout.date)
         let today = calendar.startOfDay(for: Date())
         let days = calendar.dateComponents([.day], from: previousDay, to: today).day ?? 0
@@ -33,6 +35,7 @@ struct HomeView: View {
     }
 
     var body: some View {
+        let summary = self.summary
         NavigationStack(path: $navigationPath) {
             ScrollView {
                 VStack(spacing: 24) {
@@ -47,10 +50,10 @@ struct HomeView: View {
                             .accessibilityAddTraits(.isHeader)
                     }
                     .frame(maxWidth: .infinity, minHeight: 56, alignment: .leading)
-                    dashboardSection
-                    activitySummary
-                    bestUpdatesSection
-                    todaySection
+                    dashboardSection(workoutDates: summary.workoutDates)
+                    activitySummary(summary: summary)
+                    bestUpdatesSection(summary: summary)
+                    todaySection(summary: summary)
                 }
                 .padding(.horizontal, 20)
                 .padding(.top, 16)
@@ -71,7 +74,7 @@ struct HomeView: View {
         }
     }
 
-    private var dashboardSection: some View {
+    private func dashboardSection(workoutDates: Set<String>) -> some View {
         Button {
             selectedTab = 1
         } label: {
@@ -94,11 +97,11 @@ struct HomeView: View {
         .accessibilityLabel("\(monthYearHeaderString)のトレーニングカレンダーを履歴で開く")
     }
 
-    private var activitySummary: some View {
+    private func activitySummary(summary: HomeWorkoutSummary) -> some View {
         HStack(spacing: 0) {
             HomeMetric(value: "\(summary.thisWeekWorkoutCount)回", label: "今週")
             Divider().frame(height: 34)
-            HomeMetric(value: previousWorkoutValue, label: "前回")
+            HomeMetric(value: previousWorkoutValue(for: summary.previousWorkout), label: "前回")
 
             Divider().frame(height: 34)
             HomeMetric(
@@ -112,7 +115,7 @@ struct HomeView: View {
     }
 
     @ViewBuilder
-    private var bestUpdatesSection: some View {
+    private func bestUpdatesSection(summary: HomeWorkoutSummary) -> some View {
         if !summary.personalBestUpdates.isEmpty {
             VStack(alignment: .leading, spacing: 10) {
                 Text("ベスト更新")
@@ -159,7 +162,7 @@ struct HomeView: View {
         }
     }
 
-    private var todaySection: some View {
+    private func todaySection(summary: HomeWorkoutSummary) -> some View {
         VStack(alignment: .leading, spacing: 10) {
             Text("今日")
                 .font(AppFont.caption)
@@ -169,7 +172,7 @@ struct HomeView: View {
             if let todayWorkout = summary.todayWorkout {
                 recordedTodayCard(todayWorkout)
             } else {
-                emptyTodayCard
+                emptyTodayCard(previousWorkout: summary.previousWorkout)
             }
         }
     }
@@ -215,14 +218,14 @@ struct HomeView: View {
         .accessibilityLabel("今日のトレーニング、\(workout.workoutExercises.count)種目、\(workout.totalSets)セット")
     }
 
-    private var emptyTodayCard: some View {
+    private func emptyTodayCard(previousWorkout: Workout?) -> some View {
         VStack(alignment: .leading, spacing: 16) {
             VStack(alignment: .leading, spacing: 5) {
                 Text("今日はまだ記録がありません")
                     .font(AppFont.headline)
                     .fontWeight(.semibold)
 
-                if let previousWorkout = summary.previousWorkout {
+                if let previousWorkout {
                     Text("前回は\(previousWorkout.date.monthDayString)・\(previousWorkout.workoutExercises.count)種目")
                         .font(AppFont.subheadline)
                         .foregroundStyle(.secondary)

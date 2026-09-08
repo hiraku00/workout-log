@@ -20,6 +20,27 @@ struct ExerciseLibraryView: View {
         allWorkouts.filter { !$0.isActive }
     }
 
+    /// 種目ごとの完了セットをまとめた索引。以前は行（種目）ごとに`personalRecord`/`bestReps`が
+    /// 独立して全履歴を走査していたため、種目数×履歴件数のオーダーで無駄が大きかった。
+    /// `body`の描画につき1回だけ組み立て、各行はここへO(1)で引くだけにする。
+    ///
+    /// 内蔵種目（非カスタム）は名前でグルーピングする（プリセット再同期でIDが変わっても
+    /// `representsSameExercise`と同じ基準で一致させるため）。カスタム種目はID単位で
+    /// グルーピングする（同名でも別種目として扱う）。
+    private func completedSetsIndex() -> [String: [ExerciseSet]] {
+        var index: [String: [ExerciseSet]] = [:]
+        for exercise in completedWorkouts.flatMap(\.workoutExercises) {
+            guard let template = exercise.exerciseTemplate else { continue }
+            index[Self.groupingKey(for: template), default: []]
+                .append(contentsOf: exercise.sets.filter(\.isCompleted))
+        }
+        return index
+    }
+
+    private static func groupingKey(for template: ExerciseTemplate) -> String {
+        template.isCustom ? "custom:\(template.id.uuidString)" : "preset:\(template.name)"
+    }
+
     private var filteredTemplates: [ExerciseTemplate] {
         var result = allTemplates.filter { !$0.isArchived }
         if let category = selectedCategory {
@@ -42,6 +63,8 @@ struct ExerciseLibraryView: View {
     }
 
     var body: some View {
+        let setsIndex = completedSetsIndex()
+
         NavigationStack {
             VStack(spacing: 0) {
                 // カテゴリフィルター
@@ -57,8 +80,8 @@ struct ExerciseLibraryView: View {
                                 } label: {
                                     LibraryExerciseRow(
                                         template: template,
-                                        personalRecord: personalRecord(for: template),
-                                        bestReps: bestReps(for: template)
+                                        personalRecord: personalRecord(for: template, in: setsIndex),
+                                        bestReps: bestReps(for: template, in: setsIndex)
                                     )
                                 }
                                 .swipeActions(edge: .trailing) {
@@ -204,20 +227,14 @@ struct ExerciseLibraryView: View {
     }
 
     /// 指定種目のPR（最高重量）を取得
-    private func personalRecord(for template: ExerciseTemplate) -> Double {
-        completedWorkouts
-            .flatMap { $0.workoutExercises }
-            .filter { $0.exerciseTemplate?.representsSameExercise(as: template) == true }
-            .flatMap { $0.sets.filter(\.isCompleted) }
-            .map { $0.weight }
+    private func personalRecord(for template: ExerciseTemplate, in setsIndex: [String: [ExerciseSet]]) -> Double {
+        (setsIndex[Self.groupingKey(for: template)] ?? [])
+            .map(\.weight)
             .max() ?? 0
     }
 
-    private func bestReps(for template: ExerciseTemplate) -> Int {
-        completedWorkouts
-            .flatMap { $0.workoutExercises }
-            .filter { $0.exerciseTemplate?.representsSameExercise(as: template) == true }
-            .flatMap { $0.sets.filter(\.isCompleted) }
+    private func bestReps(for template: ExerciseTemplate, in setsIndex: [String: [ExerciseSet]]) -> Int {
+        (setsIndex[Self.groupingKey(for: template)] ?? [])
             .filter(\.isBodyweight)
             .map(\.reps)
             .max() ?? 0

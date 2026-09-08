@@ -24,19 +24,25 @@ struct ExerciseDetailView: View {
     }
 
     var body: some View {
+        // 全履歴から一致する種目を探す処理（previousWorkoutRecord）は、以前はセット行ごとに
+        // 呼び直されており、セット数×履歴件数のオーダーで無駄が大きかった。ここで1回だけ
+        // 計算し、以降はこの値を使い回す。
+        let sets = workoutExercise.sortedSets
+        let previousRecord = previousWorkoutRecord
+        let previousSets = previousRecord?.exercise.sortedSets.filter(\.isCompleted) ?? []
+
         ScrollView {
             VStack(spacing: 16) {
                 if let template = workoutExercise.exerciseTemplate {
-                    previousWorkoutSection(template: template, info: previousWorkoutInfo)
+                    previousWorkoutSection(template: template, info: previousWorkoutInfo(record: previousRecord))
                 }
 
                 SetRowColumnHeader()
                     .padding(.horizontal, 16)
 
-                ForEach(workoutExercise.sortedSets) { set in
-                    let setIndex = workoutExercise.sortedSets.firstIndex(where: { $0.id == set.id }) ?? 0
-                    let previousSetInWorkout = setIndex > 0 ? workoutExercise.sortedSets[setIndex - 1] : nil
-                    let previousWorkoutSet = previousWorkoutSet(at: setIndex)
+                ForEach(Array(sets.enumerated()), id: \.element.id) { setIndex, set in
+                    let previousSetInWorkout = setIndex > 0 ? sets[setIndex - 1] : nil
+                    let previousWorkoutSet = previousWorkoutSet(at: setIndex, in: previousSets)
                     let noteSource = [previousSetInWorkout, previousWorkoutSet]
                         .compactMap { $0 }
                         .first { !$0.comment.isEmpty }
@@ -240,17 +246,16 @@ struct ExerciseDetailView: View {
         .padding(.horizontal, 12)
     }
 
-    private var previousWorkoutInfo: (date: Date, sets: [(weight: Double, reps: Int)])? {
-        guard let record = previousWorkoutRecord else { return nil }
+    private func previousWorkoutInfo(record: (workout: Workout, exercise: WorkoutExercise)?) -> (date: Date, sets: [(weight: Double, reps: Int)])? {
+        guard let record else { return nil }
         let sets = record.exercise.sortedSets
             .filter(\.isCompleted)
             .map { (weight: $0.weight, reps: $0.reps) }
         return (date: record.workout.date, sets: sets)
     }
 
-    private func previousWorkoutSet(at index: Int) -> ExerciseSet? {
-        let previousSets = previousWorkoutRecord?.exercise.sortedSets.filter(\.isCompleted) ?? []
-        return index < previousSets.count ? previousSets[index] : previousSets.last
+    private func previousWorkoutSet(at index: Int, in previousSets: [ExerciseSet]) -> ExerciseSet? {
+        index < previousSets.count ? previousSets[index] : previousSets.last
     }
 
     private var previousWorkoutRecord: (workout: Workout, exercise: WorkoutExercise)? {
@@ -640,6 +645,13 @@ struct DayWorkoutView: View {
     }
 
     /// 前後365日分の日付を生成（スワイプで遷移できる範囲）
+    ///
+    /// 各ページ（前後1年分、最大約395件）を「選択中の前後だけの窓」に絞る最適化を
+    /// 一度試したが、`currentDate`の変化と同時に`ForEach`の配列を組み替えると、
+    /// スワイプ中のページ遷移とインデックスがずれて日付を1日飛ばしてしまう不具合が
+    /// シミュレータで再現したため、安全な全件生成に戻している。対応するなら
+    /// `UIPageViewController`を直接使うなど、選択とデータ変更を同時に起こさない
+    /// 設計が必要。
     private func dateRange() -> [Date] {
         let calendar = Calendar.current
         let today = calendar.startOfDay(for: Date())
