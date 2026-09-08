@@ -20,14 +20,18 @@ final class WorkoutExercise {
         sets.sorted { $0.order < $1.order }
     }
 
-    /// この種目の総ボリューム
+    /// この種目の総ボリューム（完了セットのみ。自重は除外）
+    /// `Workout.totalVolume`と定義を揃えてある（未完了セットの見込み値を含めない）。
     var totalVolume: Double {
-        sets.reduce(0) { $0 + $1.volumeContribution }
+        sets.filter(\.isCompleted).reduce(0) { $0 + $1.volumeContribution }
     }
 
-    /// 最大重量（PR判定用。自重は除外）
+    /// 最大重量（PR判定用。完了セットのみ、自重は除外）
     var maxWeight: Double {
-        sets.filter { !$0.isBodyweight }.map { $0.weight }.max() ?? 0
+        sets
+            .filter { $0.isCompleted && !$0.isBodyweight }
+            .map(\.weight)
+            .max() ?? 0
     }
 
     init(order: Int = 0) {
