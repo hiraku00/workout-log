@@ -7,10 +7,21 @@ final class WorkoutViewModelTests: XCTestCase {
     func testWeightDisplaySeparatesValueAndUnit() {
         XCTAssertEqual(23.5.weightString(unit: "kg"), "23.5 kg")
         XCTAssertEqual(100.0.weightString(unit: "kg"), "100 kg")
-        XCTAssertEqual(10.0.setWeightDisplay(unit: "lbs"), "22.0 lbs")
+        XCTAssertEqual(10.0.setWeightDisplay(unit: .lbs), "22.0 lbs")
         XCTAssertEqual(23.5.weightString(), "23.5")
         XCTAssertEqual(0.0.weightString(unit: "kg"), "0")
-        XCTAssertEqual(ExerciseSet.bodyweightValue.setWeightDisplay(unit: "kg"), "自重")
+        XCTAssertEqual(ExerciseSet.bodyweightValue.setWeightDisplay(unit: .kg), "自重")
+    }
+
+    /// kg⇄lbs換算と「1000以上はk表記」を`WeightUnit`/`Double`拡張へ一本化したことの回帰テスト。
+    func testWeightUnitConversionAndVolumeFormatting() {
+        XCTAssertEqual(WeightUnit.kg.fromKg(100), 100)
+        XCTAssertEqual(WeightUnit.lbs.fromKg(100), 220.462, accuracy: 0.001)
+        XCTAssertEqual(WeightUnit.lbs.toKg(220.462), 100, accuracy: 0.001)
+
+        XCTAssertEqual(999.0.formattedVolume(unit: .kg), "999")
+        XCTAssertEqual(1000.0.formattedVolume(unit: .kg), "1.0k")
+        XCTAssertEqual(1234.0.formattedVolume(unit: .kg), "1.2k")
     }
 
     func testExerciseReferenceUsesGoogleImageSearchInBrave() throws {
@@ -183,21 +194,9 @@ final class WorkoutViewModelTests: XCTestCase {
         XCTAssertEqual(viewModel.personalRecord(for: afterReseed, workouts: [workout]), 100)
     }
 
+    /// `estimateOneRM`はグローバル状態(UserDefaults)を読まない純粋関数であるべき、という回帰テスト。
     func testEstimatedOneRMUsesSelectedFormula() {
-        let defaults = UserDefaults.standard
-        let previousValue = defaults.object(forKey: "oneRMFormula")
-        defer {
-            if let previousValue {
-                defaults.set(previousValue, forKey: "oneRMFormula")
-            } else {
-                defaults.removeObject(forKey: "oneRMFormula")
-            }
-        }
-
-        defaults.set(OneRMFormula.epley.rawValue, forKey: "oneRMFormula")
-        XCTAssertEqual(WorkoutViewModel.estimateOneRM(weight: 14, reps: 10), 18.67, accuracy: 0.01)
-
-        defaults.set(OneRMFormula.oConner.rawValue, forKey: "oneRMFormula")
-        XCTAssertEqual(WorkoutViewModel.estimateOneRM(weight: 14, reps: 10), 17.5, accuracy: 0.01)
+        XCTAssertEqual(WorkoutViewModel.estimateOneRM(weight: 14, reps: 10, formula: .epley), 18.67, accuracy: 0.01)
+        XCTAssertEqual(WorkoutViewModel.estimateOneRM(weight: 14, reps: 10, formula: .oConner), 17.5, accuracy: 0.01)
     }
 }

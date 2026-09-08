@@ -9,10 +9,12 @@ struct ExerciseDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(WorkoutViewModel.self) private var viewModel
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
+    @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @AppStorage("restTimerDuration") private var timerDuration = 60
 
     @State private var showingTimerDurationPicker = false
+    @State private var addSetHapticTrigger = false
 
     private let timerDurationOptions = Array(stride(from: 10, through: 300, by: 5))
 
@@ -68,6 +70,7 @@ struct ExerciseDetailView: View {
             .padding(.bottom, 40)
         }
         .background(AppScreenBackground())
+        .sensoryFeedback(.impact(weight: .light), trigger: addSetHapticTrigger)
         .safeAreaInset(edge: .top, spacing: 0) {
             RestTimerBar(
                 timerDuration: timerDuration,
@@ -138,6 +141,7 @@ struct ExerciseDetailView: View {
             withAnimation(reduceMotion ? .linear(duration: 0.12) : .spring(response: 0.3, dampingFraction: 1)) {
                 viewModel.addSet(to: workoutExercise, context: modelContext)
             }
+            addSetHapticTrigger.toggle()
         } label: {
             HStack(spacing: 6) {
                 Image(systemName: "plus")
@@ -204,7 +208,11 @@ struct ExerciseDetailView: View {
 
                             let estimatedOneRM = set.weight == ExerciseSet.bodyweightValue
                                 ? 0
-                                : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
+                                : WorkoutViewModel.estimateOneRM(
+                                    weight: set.weight,
+                                    reps: set.reps,
+                                    formula: OneRMFormula(rawValue: oneRMFormula) ?? .epley
+                                )
                             Text(estimatedOneRM > 0 ? estimatedOneRM.setWeightDisplay(unit: weightUnit) : "—")
                                 .font(AppFont.caption2)
                                 .foregroundStyle(.secondary)
@@ -333,7 +341,7 @@ struct DayWorkoutContent: View {
     @Environment(WorkoutViewModel.self) private var viewModel
     @Environment(\.modelContext) private var modelContext
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
 
     @State private var showingExercisePicker = false
     @State private var showingDeleteConfirmation = false
@@ -342,6 +350,7 @@ struct DayWorkoutContent: View {
     @State private var showingCopyDatePicker = false
     @State private var exerciseToDelete: WorkoutExercise?
     @State private var workout: Workout?
+    @State private var reorderHapticTrigger = false
 
     var body: some View {
         VStack(spacing: 16) {
@@ -426,6 +435,7 @@ struct DayWorkoutContent: View {
         .onAppear {
             ensureWorkout()
         }
+        .sensoryFeedback(.impact(weight: .light), trigger: reorderHapticTrigger)
     }
 
     /// 指定日にコピーしてホームタブへ移動する
@@ -466,6 +476,7 @@ struct DayWorkoutContent: View {
                     withAnimation(.snappy) {
                         viewModel.moveExercise(exercise, by: -1, in: workout)
                     }
+                    reorderHapticTrigger.toggle()
                 } label: {
                     Image(systemName: "chevron.up")
                         .frame(width: 34, height: 34)
@@ -477,6 +488,7 @@ struct DayWorkoutContent: View {
                     withAnimation(.snappy) {
                         viewModel.moveExercise(exercise, by: 1, in: workout)
                     }
+                    reorderHapticTrigger.toggle()
                 } label: {
                     Image(systemName: "chevron.down")
                         .frame(width: 34, height: 34)
@@ -507,10 +519,12 @@ struct DayWorkoutContent: View {
         .contextMenu {
             Button("上へ移動", systemImage: "chevron.up") {
                 viewModel.moveExercise(exercise, by: -1, in: workout)
+                reorderHapticTrigger.toggle()
             }
             .disabled(index == 0)
             Button("下へ移動", systemImage: "chevron.down") {
                 viewModel.moveExercise(exercise, by: 1, in: workout)
+                reorderHapticTrigger.toggle()
             }
             .disabled(index == workout.sortedExercises.count - 1)
             Button("削除", role: .destructive) {
@@ -589,10 +603,7 @@ struct DayWorkoutContent: View {
     }
 
     private func formattedVolume(for workout: Workout) -> String {
-        let vol = weightUnit == "lbs" ? workout.totalVolume * 2.20462 : workout.totalVolume
-        return vol >= 1000
-            ? String(format: "%.1fk", vol / 1000)
-            : String(format: "%.0f", vol)
+        workout.totalVolume.formattedVolume(unit: weightUnit)
     }
 }
 
@@ -647,32 +658,3 @@ struct DayWorkoutView: View {
 
 // 後方互換の型名
 typealias ActiveWorkoutView = DayWorkoutView
-
-// MARK: - ヘッダー統計ボックス
-struct HeaderStatBox: View {
-    let title: String
-    let value: String
-
-    var body: some View {
-        VStack(spacing: 4) {
-            Text(title)
-                .font(AppFont.caption2)
-                .fontWeight(.bold)
-                .foregroundStyle(.secondary)
-
-            Text(value)
-                .font(AppFont.title3)
-                .fontWeight(.bold)
-                .foregroundStyle(.primary)
-                .monospacedDigit()
-        }
-        .frame(maxWidth: .infinity)
-        .padding(.vertical, 10)
-        .background(AppDesign.elevatedSurface)
-        .clipShape(RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous))
-        .overlay(
-            RoundedRectangle(cornerRadius: AppDesign.cornerMedium, style: .continuous)
-                .stroke(AppDesign.hairline, lineWidth: 0.5)
-        )
-    }
-}

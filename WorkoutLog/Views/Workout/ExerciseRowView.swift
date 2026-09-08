@@ -8,7 +8,8 @@ struct ExerciseRowView: View {
     var onDeleteSet: ((ExerciseSet) -> Void)? = nil
     var embedded = false
 
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
+    @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
 
     private var completedSummary: String {
         let sets = workoutExercise.sortedSets
@@ -82,7 +83,13 @@ struct ExerciseRowView: View {
                                 .frame(width: WorkoutRecordColumn.reps, alignment: .trailing)
                             Spacer(minLength: SetRowLayout.minimumGap)
 
-                            let oneRM = set.isBodyweight ? 0 : WorkoutViewModel.estimateOneRM(weight: set.weight, reps: set.reps)
+                            let oneRM = set.isBodyweight
+                                ? 0
+                                : WorkoutViewModel.estimateOneRM(
+                                    weight: set.weight,
+                                    reps: set.reps,
+                                    formula: OneRMFormula(rawValue: oneRMFormula) ?? .epley
+                                )
                             Text(oneRM > 0 ? oneRM.weightString() : "—")
                                 .font(AppFont.caption)
                                 .foregroundStyle(.secondary)

@@ -5,14 +5,19 @@ import SwiftData
 struct HomeView: View {
     @Environment(WorkoutViewModel.self) private var viewModel
     @Query(sort: \Workout.date, order: .reverse) private var allWorkouts: [Workout]
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
+    @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
 
     private let calendar = Calendar.current
 
     private var summary: HomeWorkoutSummary {
-        WorkoutInsights.homeSummary(workouts: allWorkouts, calendar: calendar)
+        WorkoutInsights.homeSummary(
+            workouts: allWorkouts,
+            calendar: calendar,
+            oneRMFormula: OneRMFormula(rawValue: oneRMFormula) ?? .epley
+        )
     }
 
     private var workoutDates: Set<String> {
@@ -245,10 +250,9 @@ struct HomeView: View {
     private func bestUpdateDescription(_ update: PersonalBestUpdate) -> String {
         switch update.metric {
         case .estimatedOneRM:
-            let factor = weightUnit == "lbs" ? 2.20462 : 1
-            let previous = update.previousValue * factor
-            let current = update.currentValue * factor
-            return String(format: "推定1RM %.1f → %.1f %@", previous, current, weightUnit)
+            let previous = weightUnit.fromKg(update.previousValue)
+            let current = weightUnit.fromKg(update.currentValue)
+            return String(format: "推定1RM %.1f → %.1f %@", previous, current, weightUnit.rawValue)
         case .bodyweightReps:
             return "最大回数 \(Int(update.previousValue)) → \(Int(update.currentValue)) 回"
         }
@@ -399,7 +403,8 @@ struct CalendarGridView: View {
 // MARK: - 1RM計算機
 struct RMCalculatorView: View {
     @Environment(\.dismiss) private var dismiss
-    @AppStorage("weightUnit") private var weightUnit = "kg"
+    @AppStorage("weightUnit") private var weightUnit: WeightUnit = .kg
+    @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @State private var weight: Double = 60
     @State private var reps: Int = 10
 
@@ -408,11 +413,11 @@ struct RMCalculatorView: View {
     }
 
     private var oneRM: Double {
-        WorkoutViewModel.estimateOneRM(weight: weight, reps: reps)
+        WorkoutViewModel.estimateOneRM(weight: weight, reps: reps, formula: OneRMFormula(rawValue: oneRMFormula) ?? .epley)
     }
 
     private var displayOneRM: Double {
-        weightUnit == "lbs" ? oneRM * 2.20462 : oneRM
+        weightUnit.fromKg(oneRM)
     }
 
     var body: some View {
@@ -422,7 +427,7 @@ struct RMCalculatorView: View {
                     Text("推定1RM")
                         .font(AppFont.subheadline)
                         .foregroundStyle(.secondary)
-                    Text("\(displayOneRM.weightString(unit: weightUnit))")
+                    Text("\(displayOneRM.weightString(unit: weightUnit.rawValue))")
                         .font(.system(size: 48, weight: .bold, design: .rounded))
                         .monospacedDigit()
                 }
@@ -437,8 +442,8 @@ struct RMCalculatorView: View {
                             .foregroundStyle(.secondary)
                         Picker("重量", selection: $weight) {
                             ForEach(weightOptions, id: \.self) { val in
-                                let display = weightUnit == "lbs" ? val * 2.20462 : val
-                                Text(display.weightString(unit: weightUnit)).tag(val)
+                                let display = weightUnit.fromKg(val)
+                                Text(display.weightString(unit: weightUnit.rawValue)).tag(val)
                             }
                         }
                         .pickerStyle(.wheel)

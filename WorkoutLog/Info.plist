@@ -24,8 +24,6 @@
 	<array>
 		<string>brave</string>
 	</array>
-	<key>NSFaceIDUsageDescription</key>
-	<string>Face IDを使用してアプリへのアクセスを保護します</string>
 	<key>NSAlarmKitUsageDescription</key>
 	<string>休憩タイマー終了時に、別のアプリを使用中でもアラームでお知らせします。</string>
 	<key>UIApplicationSceneManifest</key>
