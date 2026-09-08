@@ -5,6 +5,7 @@ import SwiftUI
 /// リビルドの成否はMac側スクリプトが送り込むworkoutlog_status.jsonから読む。
 struct SyncStatusView: View {
     private let calendar = Calendar.current
+    private static let trustSteps = "Settings → General → VPN & Device Management → Trust"
 
     private var profileExpiration: Date? {
         ProvisioningProfileReader.expirationDate()
@@ -24,21 +25,32 @@ struct SyncStatusView: View {
                         statusRow(
                             title: "証明書の有効期限",
                             value: profileExpirationDescription(profileExpiration, remainingDays: remainingDays),
-                            subtitle: isNear
-                                ? "期限が近づいています。この後アプリが開けなくなったら、設定→一般→VPNとデバイス管理で「信頼」をタップしてください"
-                                : "期限切れになるとアプリが起動できなくなります。次のリビルドで自動更新されます",
+                            subtitle: "アプリを実行するための許可証（無料のApple IDでは7日で失効）",
+                            action: isNear ? "起動できない時は \(Self.trustSteps) をタップ" : nil,
                             isWarning: isNear
                         )
                     } else {
                         statusRow(
                             title: "証明書の有効期限",
                             value: "不明",
-                            subtitle: "この端末のprofileから期限を読み取れませんでした",
+                            subtitle: "アプリを実行するための許可証（無料のApple IDでは7日で失効）",
+                            action: nil,
                             isWarning: false
                         )
                     }
                 } header: {
-                    Text("証明書")
+                    Text("証明書とは")
+                } footer: {
+                    Text("""
+                    Appleの無料アカウントは、アプリを動かす許可証（provisioning profile）が7日ごとに切れる仕様です。
+
+                    期限切れになると、アプリのアイコンをタップしても起動できなくなります。切れる前にMacが自動で新しい許可証を発行し直すので、通常は何もしなくて大丈夫です。
+
+                    もし既に起動できなくなっていたら:
+                    1. iPhoneのロックを解除し、Macに接続する
+                    2. 自動的に再ビルドされるのを待つ（下の「Mac側の自動処理」参照）
+                    3. \(Self.trustSteps) をタップする
+                    """)
                 }
 
                 Section {
@@ -46,9 +58,8 @@ struct SyncStatusView: View {
                     statusRow(
                         title: "最終バックアップ",
                         value: backupStatusDescription(status),
-                        subtitle: backupFailed
-                            ? "取得に失敗しています。iPhoneのロックを解除し、Macに接続しておいてください"
-                            : "この日時までの記録がMacに退避されています",
+                        subtitle: "その日の記録をMacへ複製した日時。データが消えても復元できる保険",
+                        action: backupFailed ? "取得に失敗中。iPhoneのロックを解除してMacに接続してください" : nil,
                         isWarning: backupFailed
                     )
 
@@ -56,22 +67,27 @@ struct SyncStatusView: View {
                     statusRow(
                         title: "最終リビルド",
                         value: rebuildStatusDescription(status),
-                        subtitle: rebuildFailed
-                            ? "更新に失敗しています。この状態が続くと証明書が失効し、アプリが起動できなくなります"
-                            : "証明書を新しく発行し直し、期限切れを防ぐ処理です",
+                        subtitle: "許可証を新しく発行し直した日時。上の「証明書の有効期限」を延長する処理",
+                        action: rebuildFailed ? "更新に失敗中。このままだと証明書が失効します" : nil,
                         isWarning: rebuildFailed
                     )
 
+                    let next = nextRebuildInfo(status)
                     statusRow(
                         title: "次回の実行予定",
-                        value: nextRebuildDescription(status),
-                        subtitle: "前回成功から\(status?.rebuildIntervalDays.map(String.init) ?? "5")日後の朝9:00に、初めて実際のビルドが試みられます（それまでは毎朝チェックだけして何もしません）",
-                        isWarning: false
+                        value: next.value,
+                        subtitle: "上の「証明書の有効期限」が切れる前に、次の更新を試みる予定日",
+                        action: next.isOverdue ? "予定日を過ぎています。iPhoneをMacに接続してください" : nil,
+                        isWarning: next.isOverdue
                     )
                 } header: {
                     Text("Mac側の自動処理")
                 } footer: {
-                    Text("毎朝9:00に再ビルドの判定、9:10にバックアップ取得がMac上で自動実行されます。リビルドは毎日ではなく、前回成功から一定日数経った時だけ実際に走ります。アプリが開けなくなった時は、iPhoneの設定→一般→VPNとデバイス管理で「信頼」をタップしてください。")
+                    Text("""
+                    バックアップとリビルドは、Mac上で30分おきに終日チェックされます。
+
+                    起動できない時は \(Self.trustSteps) をタップしてください。
+                    """)
                 }
             }
             .navigationTitle("自動リビルド")
@@ -79,19 +95,30 @@ struct SyncStatusView: View {
         }
     }
 
-    private func statusRow(title: String, value: String, subtitle: String, isWarning: Bool) -> some View {
+    private func statusRow(title: String, value: String, subtitle: String, action: String?, isWarning: Bool) -> some View {
         VStack(alignment: .leading, spacing: 4) {
-            HStack {
+            HStack(spacing: 6) {
+                Image(systemName: isWarning ? "exclamationmark.triangle.fill" : "checkmark.circle.fill")
+                    .foregroundStyle(isWarning ? .orange : .secondary.opacity(0.5))
+                    .font(.system(size: 13))
                 Text(title)
                 Spacer()
                 Text(value)
                     .foregroundStyle(isWarning ? .orange : .secondary)
+                    .fontWeight(isWarning ? .semibold : .regular)
             }
             Text(subtitle)
                 .font(AppFont.caption2)
                 .foregroundStyle(.tertiary)
+                .padding(.leading, 19)
+            if let action {
+                Text("→ \(action)")
+                    .font(AppFont.caption2)
+                    .foregroundStyle(.orange)
+                    .padding(.leading, 19)
+            }
         }
-        .padding(.vertical, 2)
+        .padding(.vertical, 3)
     }
 
     private func daysUntil(_ date: Date) -> Int {
@@ -128,11 +155,19 @@ struct SyncStatusView: View {
         }
     }
 
-    private func nextRebuildDescription(_ status: DeviceSyncStatus?) -> String {
-        guard let nextDate = status?.nextRebuildDate else { return "未定（まだ記録がありません）" }
+    /// 次回リビルド予定日の表示文字列と、その予定日を過ぎてしまっているか（＝催促が必要か）を返す。
+    private func nextRebuildInfo(_ status: DeviceSyncStatus?) -> (value: String, isOverdue: Bool) {
+        guard let nextDate = status?.nextRebuildDate else {
+            return ("未定（まだ記録がありません）", false)
+        }
         let days = daysUntil(nextDate)
-        if days <= 0 { return "\(nextDate.shortDisplayString)以降" }
-        return "\(nextDate.shortDisplayString)以降（あと\(days)日）"
+        if days < 0 {
+            return ("\(nextDate.shortDisplayString)（予定日超過）", true)
+        }
+        if days == 0 {
+            return ("\(nextDate.shortDisplayString)以降", false)
+        }
+        return ("\(nextDate.shortDisplayString)以降（あと\(days)日）", false)
     }
 
     private func dateTimeString(_ date: Date) -> String {
