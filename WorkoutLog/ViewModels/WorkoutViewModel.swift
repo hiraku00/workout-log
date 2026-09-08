@@ -145,7 +145,9 @@ final class WorkoutViewModel {
 
     /// 種目をワークアウトに追加する（3セット分の枠を自動作成）
     func addExercise(_ template: ExerciseTemplate, to workout: Workout, context: ModelContext) {
-        guard !workout.workoutExercises.contains(where: { $0.exerciseTemplate?.id == template.id }) else { return }
+        guard !workout.workoutExercises.contains(where: {
+            $0.exerciseTemplate?.representsSameExercise(as: template) == true
+        }) else { return }
         let order = workout.workoutExercises.count
         let workoutExercise = WorkoutExercise(order: order)
         workoutExercise.exerciseTemplate = template
@@ -263,7 +265,8 @@ final class WorkoutViewModel {
     func personalRecord(for template: ExerciseTemplate, workouts: [Workout]) -> Double {
         var maxWeight = 0.0
         for workout in workouts where !workout.isActive {
-            for exercise in workout.workoutExercises where exercise.exerciseTemplate?.id == template.id {
+            for exercise in workout.workoutExercises
+                where exercise.exerciseTemplate?.representsSameExercise(as: template) == true {
                 for set in exercise.sets where set.isCompleted && !set.isBodyweight {
                     maxWeight = max(maxWeight, set.weight)
                 }

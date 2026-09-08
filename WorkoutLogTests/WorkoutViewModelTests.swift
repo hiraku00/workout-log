@@ -119,6 +119,70 @@ final class WorkoutViewModelTests: XCTestCase {
         XCTAssertEqual(workout.completedExerciseCount, 1)
     }
 
+    /// `WorkoutExercise.totalVolume`/`maxWeight`は`Workout.totalVolume`と同じく
+    /// 完了セットのみを対象にする（未完了セットの見込み値を含めない）。
+    func testWorkoutExerciseTotalsOnlyIncludeCompletedSets() {
+        let exercise = WorkoutExercise()
+
+        let completed = ExerciseSet(order: 0, weight: 80, reps: 8)
+        completed.isCompleted = true
+        completed.workoutExercise = exercise
+        let plannedHeavier = ExerciseSet(order: 1, weight: 200, reps: 10)
+        plannedHeavier.workoutExercise = exercise
+        exercise.sets = [completed, plannedHeavier]
+
+        XCTAssertEqual(exercise.totalVolume, 640)
+        XCTAssertEqual(exercise.maxWeight, 80)
+    }
+
+    /// プリセット再同期でIDが変わった内蔵種目でも、同名であれば重複追加とみなされる
+    /// （`representsSameExercise`に一本化したことの回帰テスト）。
+    func testAddingExerciseWithReseededTemplateDoesNotDuplicate() throws {
+        let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
+        let container = try ModelContainer(
+            for: Workout.self,
+            WorkoutExercise.self,
+            ExerciseSet.self,
+            ExerciseTemplate.self,
+            configurations: configuration
+        )
+        let context = ModelContext(container)
+
+        let beforeReseed = ExerciseTemplate(name: "ベンチプレス", category: "胸", muscleGroup: "大胸筋")
+        let afterReseed = ExerciseTemplate(name: "ベンチプレス", category: "胸", muscleGroup: "大胸筋")
+        XCTAssertNotEqual(beforeReseed.id, afterReseed.id)
+
+        let workout = Workout()
+        context.insert(workout)
+
+        let viewModel = WorkoutViewModel()
+        viewModel.addExercise(beforeReseed, to: workout, context: context)
+        viewModel.addExercise(afterReseed, to: workout, context: context)
+
+        XCTAssertEqual(workout.workoutExercises.count, 1)
+    }
+
+    /// プリセット再同期でIDが変わった内蔵種目でも、同名であればPRが正しく合算される
+    /// （`representsSameExercise`に一本化したことの回帰テスト）。
+    func testPersonalRecordAcrossReseededTemplateIDs() {
+        let beforeReseed = ExerciseTemplate(name: "デッドリフト", category: "背中", muscleGroup: "背中")
+        let afterReseed = ExerciseTemplate(name: "デッドリフト", category: "背中", muscleGroup: "背中")
+
+        let workout = Workout()
+        workout.isActive = false
+        let exercise = WorkoutExercise()
+        exercise.exerciseTemplate = beforeReseed
+        exercise.workout = workout
+        let set = ExerciseSet(order: 0, weight: 100, reps: 5)
+        set.isCompleted = true
+        set.workoutExercise = exercise
+        exercise.sets = [set]
+        workout.workoutExercises = [exercise]
+
+        let viewModel = WorkoutViewModel()
+        XCTAssertEqual(viewModel.personalRecord(for: afterReseed, workouts: [workout]), 100)
+    }
+
     func testEstimatedOneRMUsesSelectedFormula() {
         let defaults = UserDefaults.standard
         let previousValue = defaults.object(forKey: "oneRMFormula")

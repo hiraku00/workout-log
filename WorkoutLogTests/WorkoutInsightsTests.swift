@@ -112,6 +112,26 @@ final class WorkoutInsightsTests: XCTestCase {
         XCTAssertTrue(updates.isEmpty)
     }
 
+    /// プリセット再同期でIDが変わった内蔵種目でも、同名であれば同じ種目として履歴が継続する
+    /// （`representsSameExercise`に一本化したことの回帰テスト）。
+    func testSamePresetNameWithDifferentIDsAcrossReseedIsStillCompared() {
+        let beforeReseed = ExerciseTemplate(name: "ベンチプレス", category: "胸", muscleGroup: "大胸筋", isCustom: false)
+        let afterReseed = ExerciseTemplate(name: "ベンチプレス", category: "胸", muscleGroup: "大胸筋", isCustom: false)
+        XCTAssertNotEqual(beforeReseed.id, afterReseed.id)
+
+        let previous = makeWorkout(day: 10, template: beforeReseed, sets: [(60, 5)])
+        let current = makeWorkout(day: 11, template: afterReseed, sets: [(70, 5)])
+
+        let updates = WorkoutInsights.personalBestUpdates(
+            for: current,
+            comparedTo: [current, previous],
+            calendar: calendar
+        )
+
+        XCTAssertEqual(updates.count, 1)
+        XCTAssertEqual(updates.first?.metric, .estimatedOneRM)
+    }
+
     private func makeWorkout(
         day: Int,
         template: ExerciseTemplate,

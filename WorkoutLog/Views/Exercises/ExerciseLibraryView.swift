@@ -207,7 +207,7 @@ struct ExerciseLibraryView: View {
     private func personalRecord(for template: ExerciseTemplate) -> Double {
         completedWorkouts
             .flatMap { $0.workoutExercises }
-            .filter { $0.exerciseTemplate?.id == template.id }
+            .filter { $0.exerciseTemplate?.representsSameExercise(as: template) == true }
             .flatMap { $0.sets.filter(\.isCompleted) }
             .map { $0.weight }
             .max() ?? 0
@@ -216,7 +216,7 @@ struct ExerciseLibraryView: View {
     private func bestReps(for template: ExerciseTemplate) -> Int {
         completedWorkouts
             .flatMap { $0.workoutExercises }
-            .filter { $0.exerciseTemplate?.id == template.id }
+            .filter { $0.exerciseTemplate?.representsSameExercise(as: template) == true }
             .flatMap { $0.sets.filter(\.isCompleted) }
             .filter(\.isBodyweight)
             .map(\.reps)

@@ -88,7 +88,7 @@ enum WorkoutInsights {
 
         return workout.workoutExercises.compactMap { exercise in
             guard let template = exercise.exerciseTemplate else { return nil }
-            let history = previousExercises.filter { $0.exerciseTemplate?.id == template.id }
+            let history = previousExercises.filter { $0.exerciseTemplate?.representsSameExercise(as: template) == true }
 
             if let current = bestEstimatedOneRM(in: exercise) {
                 guard let previous = history.compactMap(bestEstimatedOneRM).max(),
