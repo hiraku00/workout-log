@@ -2,12 +2,22 @@
 # Shared helper for daily_backup.sh and rebuild_and_install.sh: maintains a
 # small status JSON on the Mac and pushes it to the device so the app's
 # home screen can show whether the automation is actually working
-# (WorkoutLog/Utilities/DeviceSyncStatus.swift reads it).
+# (WorkoutLog/Utilities/DeviceSyncStatus.swift reads it). Also owns log
+# rotation, since both callers run every 30 minutes and would otherwise
+# accumulate one log file per run forever.
 #
 # Expects DEVICE_ID, BUNDLE_ID, LOG_DIR and LOG_FILE to already be set by
-# the caller. Requires `jq`.
+# the caller (see config.sh). Requires `jq`.
 
 STATUS_FILE_LOCAL="$LOG_DIR/device_status.json"
+
+# Deletes log files older than LOG_RETENTION_DAYS (default 14) from LOG_DIR.
+# Call this once per run, after LOG_FILE for the current run already exists,
+# so a script never deletes the very file it's about to write to.
+prune_old_logs() {
+  local retention_days="${LOG_RETENTION_DAYS:-14}"
+  find "$LOG_DIR" -maxdepth 1 -name '*.log' -mtime +"$retention_days" -delete 2>/dev/null || true
+}
 
 # update_and_push_status '<jq filter>' [jq args...]
 # Example: update_and_push_status '.lastBackupPulledAt = $now' --arg now "$(date -u +%Y-%m-%dT%H:%M:%SZ)"

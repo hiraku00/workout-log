@@ -138,7 +138,8 @@ struct SyncStatusView: View {
     private func backupStatusDescription(_ status: DeviceSyncStatus?) -> String {
         guard let status else { return "未取得" }
         if status.lastBackupResult == "failed" {
-            return "取得失敗"
+            guard let attemptDate = status.lastBackupAttemptAt else { return "取得失敗" }
+            return "取得失敗（\(dateTimeString(attemptDate))時点）"
         }
         guard let date = status.lastBackupPulledAt else { return "未取得" }
         return dateTimeString(date)

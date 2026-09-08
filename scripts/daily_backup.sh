@@ -7,25 +7,33 @@
 # either because a backup already succeeded today, or because the device
 # isn't reachable; whichever run happens to be the first to catch the phone
 # connected on a given day does the actual pull, and the rest skip.
+#
+# Pass --force to skip the "already backed up today" check. rebuild_and_install.sh
+# uses this right before installing, so the backup it may push back to the
+# device afterwards (see that script) is never more than a few minutes stale
+# instead of up to a day old.
 
 set -euo pipefail
 
-BUNDLE_ID="com.hiraku.WorkoutLog"
-DEVICE_ID="2BD60440-485E-5D54-BE5A-23FE8E220A05"
-LOG_DIR="$HOME/Library/Logs/WorkoutLogRebuild"
-BACKUP_DIR="$HOME/Library/Application Support/WorkoutLogBackups"
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=config.sh
+source "$SCRIPT_DIR/config.sh"
+
+FORCE=false
+[[ "${1:-}" == "--force" ]] && FORCE=true
 
 mkdir -p "$LOG_DIR" "$BACKUP_DIR"
 LOG_FILE="$LOG_DIR/dailybackup_$(date +%Y%m%d_%H%M%S).log"
 
-echo "=== $(date) : daily backup check ===" >> "$LOG_FILE"
+echo "=== $(date) : daily backup check (force=$FORCE) ===" >> "$LOG_FILE"
 
 # shellcheck source=lib_status.sh
 source "$SCRIPT_DIR/lib_status.sh"
+prune_old_logs
 
-# Already got today's backup? Nothing left to do until tomorrow.
-if ls "$BACKUP_DIR"/backup_"$(date +%Y%m%d)"_*.json > /dev/null 2>&1; then
+# Already got today's backup? Nothing left to do until tomorrow (unless forced).
+if ! $FORCE && ls "$BACKUP_DIR"/backup_"$(date +%Y%m%d)"_*.json > /dev/null 2>&1; then
   echo "Already backed up today. Skipping." >> "$LOG_FILE"
   exit 0
 fi
