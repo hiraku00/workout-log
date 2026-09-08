@@ -10,20 +10,19 @@
 
 set -euo pipefail
 
-PROJECT_DIR="/Users/hiraku/Practice/gym-app"
 SCHEME="WorkoutLog"
-BUNDLE_ID="com.hiraku.WorkoutLog"
-DEVICE_ID="2BD60440-485E-5D54-BE5A-23FE8E220A05"
-LOG_DIR="$HOME/Library/Logs/WorkoutLogRebuild"
 DERIVED_DATA="$HOME/Library/Developer/Xcode/DerivedData/WorkoutLog-cfclcjrmrzlbaybmoashsgdrhqap"
 APP_PATH="$DERIVED_DATA/Build/Products/Debug-iphoneos/WorkoutLog.app"
-STATE_FILE="$LOG_DIR/last_success"
 REBUILD_INTERVAL_DAYS=5
-BACKUP_DIR="$HOME/Library/Application Support/WorkoutLogBackups"
 PROFILE_DIR="$HOME/Library/Developer/Xcode/UserData/Provisioning Profiles"
 PROFILE_REFRESH_THRESHOLD_DAYS=2
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+
+# shellcheck source=config.sh
+source "$SCRIPT_DIR/config.sh"
+
+STATE_FILE="$LOG_DIR/last_success"
 
 mkdir -p "$LOG_DIR" "$BACKUP_DIR"
 LOG_FILE="$LOG_DIR/rebuild_$(date +%Y%m%d_%H%M%S).log"
@@ -32,6 +31,7 @@ echo "=== $(date) : daily check ===" >> "$LOG_FILE"
 
 # shellcheck source=lib_status.sh
 source "$SCRIPT_DIR/lib_status.sh"
+prune_old_logs
 
 # Skip unless REBUILD_INTERVAL_DAYS have passed since the last successful run.
 if [[ -f "$STATE_FILE" ]]; then
@@ -54,12 +54,16 @@ fi
 
 
 # Pull the app's own auto-exported JSON backup off the device before
-# touching the install (same logic also runs daily on its own via
-# daily_backup.sh / com.hiraku.workoutlog.dailybackup.plist). This only
-# ever reads app data, never the device as a whole. Never call
-# `devicectl device uninstall` in this script — an in-place `install`
-# preserves the data container, an uninstall wipes it.
-"$PROJECT_DIR/scripts/daily_backup.sh" >> "$LOG_FILE" 2>&1 || true
+# touching the install (same logic also runs every 30 minutes on its own
+# via daily_backup.sh / com.hiraku.workoutlog.dailybackup.plist). --force
+# skips daily_backup.sh's "already backed up today" skip, since without it
+# this pull would be a no-op whenever today's backup already happened —
+# leaving the copy pushed back to the device below (if needed) up to a day
+# stale instead of just-taken. This only ever reads app data, never the
+# device as a whole. Never call `devicectl device uninstall` in this
+# script — an in-place `install` preserves the data container, an
+# uninstall wipes it.
+"$PROJECT_DIR/scripts/daily_backup.sh" --force >> "$LOG_FILE" 2>&1 || true
 
 cd "$PROJECT_DIR"
 

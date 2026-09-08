@@ -6,6 +6,9 @@ import Foundation
 struct DeviceSyncStatus: Codable {
     var lastBackupPulledAt: Date?
     var lastBackupResult: String?
+    /// 直近のバックアップ取得を試みた日時（成功・失敗を問わない）。
+    /// daily_backup.shが失敗時に書き込む。
+    var lastBackupAttemptAt: Date?
     var lastRebuildAttemptAt: Date?
     var lastRebuildSuccessAt: Date?
     var lastRebuildResult: String?
