@@ -135,3 +135,10 @@ extension Double {
     }
 }
 
+// MARK: - Calendar拡張
+extension Calendar {
+    func isDateInThisWeek(_ date: Date) -> Bool {
+        isDate(date, equalTo: Date(), toGranularity: .weekOfYear)
+    }
+}
+
