@@ -3,6 +3,8 @@ import SwiftUI
 // MARK: - 月間カレンダーグリッド（ホーム用ミニ表示）
 struct CalendarGridView: View {
     let workoutDates: Set<String>
+    /// 「今日」の基準日。日付をまたいだときに親から更新して再描画させる
+    let today: Date
 
     private let calendar = Calendar.current
     private let weekdays = ["月", "火", "水", "木", "金", "土", "日"]
@@ -28,7 +30,7 @@ struct CalendarGridView: View {
                 }
 
                 ForEach(days, id: \.self) { date in
-                    let isToday = calendar.isDateInToday(date)
+                    let isToday = calendar.isDate(date, inSameDayAs: today)
                     let hasWorkout = hasWorkout(on: date)
                     let dayString = String(calendar.component(.day, from: date))
 
@@ -47,15 +49,15 @@ struct CalendarGridView: View {
     }
 
     private func daysInCurrentMonth() -> [Date] {
-        guard let range = calendar.range(of: .day, in: .month, for: Date()),
-              let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) else {
+        guard let range = calendar.range(of: .day, in: .month, for: today),
+              let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) else {
             return []
         }
         return range.compactMap { calendar.date(byAdding: .day, value: $0 - 1, to: startOfMonth) }
     }
 
     private func firstWeekdayOffset() -> Int {
-        guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: Date())) else {
+        guard let startOfMonth = calendar.date(from: calendar.dateComponents([.year, .month], from: today)) else {
             return 0
         }
         return (calendar.component(.weekday, from: startOfMonth) + 5) % 7

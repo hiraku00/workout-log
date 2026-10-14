@@ -9,6 +9,9 @@ struct HomeView: View {
     @AppStorage("oneRMFormula") private var oneRMFormula = OneRMFormula.epley.rawValue
     @Binding var selectedTab: Int
     @State private var navigationPath = NavigationPath()
+    @Environment(\.scenePhase) private var scenePhase
+    /// 表示中の「今日」。アプリ起動中に日付が変わっても古い表示が残らないよう、日付変更時に更新する
+    @State private var today = Date()
 
     private let calendar = Calendar.current
 
@@ -29,7 +32,7 @@ struct HomeView: View {
     private func previousWorkoutValue(for previousWorkout: Workout?) -> String {
         guard let previousWorkout else { return "なし" }
         let previousDay = calendar.startOfDay(for: previousWorkout.date)
-        let today = calendar.startOfDay(for: Date())
+        let today = calendar.startOfDay(for: self.today)
         let days = calendar.dateComponents([.day], from: previousDay, to: today).day ?? 0
         return days == 1 ? "昨日" : "\(days)日前"
     }
@@ -40,7 +43,7 @@ struct HomeView: View {
             ScrollView {
                 VStack(spacing: 24) {
                     VStack(alignment: .leading, spacing: 4) {
-                        Text(Date.now.displayString)
+                        Text(today.displayString)
                             .font(AppFont.subheadline)
                             .fontWeight(.semibold)
                             .foregroundStyle(AppDesign.accent)
@@ -66,11 +69,25 @@ struct HomeView: View {
                 DayWorkoutView(targetDate: date)
             }
         }
+        .onChange(of: scenePhase) { _, newPhase in
+            if newPhase == .active { refreshToday() }
+        }
+        .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+            refreshToday()
+        }
         .onChange(of: viewModel.homeNavigationDate) { _, newDate in
             guard let newDate else { return }
             // 今日を含めて、どの日付も同じようにスワイプ可能な日別画面へ遷移する
             navigationPath.append(newDate)
             viewModel.homeNavigationDate = nil
+        }
+    }
+
+    /// 日付が変わっていれば「今日」を更新する（変わっていなければ再描画を起こさない）
+    private func refreshToday() {
+        let now = Date()
+        if !calendar.isDate(today, inSameDayAs: now) {
+            today = now
         }
     }
 
@@ -88,7 +105,7 @@ struct HomeView: View {
                         .fontWeight(.semibold)
                         .foregroundStyle(.secondary)
                 }
-                CalendarGridView(workoutDates: workoutDates)
+                CalendarGridView(workoutDates: workoutDates, today: today)
             }
             .padding(16)
             .homeSurface()
@@ -265,7 +282,7 @@ struct HomeView: View {
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy年M月"
         formatter.locale = Locale(identifier: "ja_JP")
-        return formatter.string(from: Date())
+        return formatter.string(from: today)
     }
 }
 
