@@ -54,7 +54,7 @@ extension HistoryView {
 
     // 月範囲を生成（前後12ヶ月分）
     func monthRange() -> [Date] {
-        let today = normalizedMonth(Date())
+        let today = normalizedMonth(today)
         var months: [Date] = []
         for i in -12...12 {
             if let month = calendar.date(byAdding: .month, value: i, to: today) {
@@ -78,7 +78,7 @@ extension HistoryView {
             }
 
             ForEach(days, id: \.self) { date in
-                let isToday = calendar.isDateInToday(date)
+                let isToday = calendar.isDate(date, inSameDayAs: today)
                 let key = yyyyMMddString(for: date)
                 let hasWorkout = workoutDateMap[key] != nil
                 let isCurrentMonth = calendar.isDate(date, equalTo: month, toGranularity: .month)

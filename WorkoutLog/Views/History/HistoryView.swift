@@ -8,6 +8,7 @@ struct HistoryView: View {
 
     @Environment(WorkoutViewModel.self) var viewModel
     @Environment(\.accessibilityReduceMotion) var reduceMotion
+    @Environment(\.scenePhase) private var scenePhase
     @Binding var mainTabSelection: Int
 
     @State private var selectedCategory: String = "すべて"
@@ -17,6 +18,9 @@ struct HistoryView: View {
     @State var selectedMonth: Date = Calendar.current.date(
         from: Calendar.current.dateComponents([.year, .month], from: Date())
     ) ?? Date()
+
+    /// 表示中の「今日」。アプリ起動中に日付が変わっても今日印が古いまま残らないよう、日付変更時に更新する
+    @State var today = Date()
 
     private let categories = ["すべて", "胸", "背中", "脚", "肩", "腕", "体幹"]
     let calendar = Calendar.current
@@ -80,6 +84,20 @@ struct HistoryView: View {
             .onAppear {
                 selectedMonth = normalizedMonth(selectedMonth)
             }
+            .onChange(of: scenePhase) { _, newPhase in
+                if newPhase == .active { refreshToday() }
+            }
+            .onReceive(NotificationCenter.default.publisher(for: .NSCalendarDayChanged)) { _ in
+                refreshToday()
+            }
+        }
+    }
+
+    /// 日付が変わっていれば「今日」を更新する（変わっていなければ再描画を起こさない）
+    private func refreshToday() {
+        let now = Date()
+        if !calendar.isDate(today, inSameDayAs: now) {
+            today = now
         }
     }
 
