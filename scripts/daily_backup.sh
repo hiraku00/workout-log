@@ -38,9 +38,8 @@ if ! $FORCE && ls "$BACKUP_DIR"/backup_"$(date +%Y%m%d)"_*.json > /dev/null 2>&1
   exit 0
 fi
 
-DEVICE_LINE=$(xcrun devicectl list devices 2>>"$LOG_FILE" | grep "$DEVICE_ID" || true)
-if [[ -z "$DEVICE_LINE" ]] || echo "$DEVICE_LINE" | grep -qE "unavailable|shutdown"; then
-  echo "Device $DEVICE_ID not reachable. Skipping. ($DEVICE_LINE)" >> "$LOG_FILE"
+if ! device_reachable; then
+  echo "Device $DEVICE_ID not reachable. Skipping. (state: ${DEVICE_STATE:-unknown})" >> "$LOG_FILE"
   exit 0
 fi
 

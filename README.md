@@ -51,7 +51,7 @@ xcodebuild \
 
 無料のApple ID（Personal Team）で実機ビルドする場合、provisioning profileの有効期限が7日間のため、期限切れでアプリが起動できなくなることがあります。[scripts/rebuild_and_install.sh](scripts/rebuild_and_install.sh)は、実機が接続されている（USBまたは同一ネットワーク上のWi-Fi）ときに再ビルド・再インストールしてこれを防ぐスクリプトです。
 
-`launchd`のLaunchAgentから**30分おき**に呼び出されます。固定の時刻に1回だけ実行する方式だと、その瞬間に端末がロックされている/未接続だと丸ごと失敗するため、代わりに短い間隔で繰り返しチェックし、スクリプト内部で前回成功から5日経過しているかを判定して実際のビルドを間引きます（`REBUILD_INTERVAL_DAYS`で調整可能）。5日未満の間はすべての実行が即座に終了するため負荷はほぼゼロで、5日経過後は端末が実際に繋がる（＝ロック解除された）タイミングを捉えるまで30分おきにリトライし続けます。`DEVICE_ID`は環境依存のため、利用する場合は[scripts/config.sh](scripts/config.sh)（`rebuild_and_install.sh`・`daily_backup.sh`共通の設定）を、`xcrun devicectl list devices`で確認した自分の端末のIdentifierに書き換えてください。LaunchAgentのplist自体はリポジトリ管理外（`~/Library/LaunchAgents/`配下）です。
+`launchd`のLaunchAgentから**30分おき**に呼び出されます。固定の時刻に1回だけ実行する方式だと、その瞬間に端末がロックされている/未接続だと丸ごと失敗するため、代わりに短い間隔で繰り返しチェックし、スクリプト内部で前回成功から5日経過しているかを判定して実際のビルドを間引きます（`REBUILD_INTERVAL_DAYS`で調整可能）。5日未満の間はすべての実行が即座に終了するため負荷はほぼゼロで、5日経過後は端末が実際に繋がる（＝ロック解除された）タイミングを捉えるまで30分おきにリトライし続けます。`DEVICE_ID`は環境依存のため、利用する場合は[scripts/config.sh](scripts/config.sh)（`rebuild_and_install.sh`・`daily_backup.sh`共通の設定）を、`xcrun devicectl list devices`で確認した自分の端末のIdentifier（CoreDevice IDまたはUDID）に書き換えてください。端末の接続判定は`devicectl list devices`の表示をgrepせず、`devicectl device info details`の`Device State`で行うため（Xcode 27でlistのIdentifier列がUDID表記になり、grep方式では接続中でも未接続と誤判定された）、どちらの表記でも動作します。LaunchAgentのplist自体はリポジトリ管理外（`~/Library/LaunchAgents/`配下）です。
 
 ログは[scripts/lib_status.sh](scripts/lib_status.sh)の`prune_old_logs`が、両スクリプトの実行のたびに14日（`config.sh`の`LOG_RETENTION_DAYS`）より古いログファイルを削除するため、際限なく増え続けることはありません。
 
