@@ -11,6 +11,16 @@
 
 STATUS_FILE_LOCAL="$LOG_DIR/device_status.json"
 
+# Returns 0 if the device is reachable (USB "connected" or Wi-Fi paired
+# "available"). Asks `device info details` instead of grepping `list devices`:
+# newer devicectl prints the hardware UDID in the list's Identifier column,
+# which no longer matches the CoreDevice UUID kept in DEVICE_ID, while `info
+# details --device` accepts either. Sets DEVICE_STATE for log messages.
+device_reachable() {
+  DEVICE_STATE=$(xcrun devicectl device info details --device "$DEVICE_ID" 2>>"$LOG_FILE" | grep -m1 "Device State:" | sed 's/.*Device State: *//' || true)
+  [[ "$DEVICE_STATE" == "connected" || "$DEVICE_STATE" == "available"* ]]
+}
+
 # Deletes log files older than LOG_RETENTION_DAYS (default 14) from LOG_DIR.
 # Call this once per run, after LOG_FILE for the current run already exists,
 # so a script never deletes the very file it's about to write to.
